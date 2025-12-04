@@ -521,13 +521,17 @@ const SettingsScreen = ({ navigation }) => {
                 </TouchableOpacity>
               ))}
 
-              {/* Custom Sounds */}
-              {availableSounds && availableSounds.length > 0 && (
-                <>
-                  <View style={styles.customSoundsDivider}>
-                    <Text style={styles.customSoundsLabel}>Sonidos Personalizados</Text>
-                  </View>
-                  {availableSounds.map((sound) => (
+              {/* Custom Sounds - Filter out built-in sounds */}
+              {(() => {
+                const builtInIds = NOTIFICATION_SOUNDS.map(s => s.id);
+                const customSounds = (availableSounds || []).filter(s => !builtInIds.includes(s.id));
+                if (customSounds.length === 0) return null;
+                return (
+                  <>
+                    <View style={styles.customSoundsDivider}>
+                      <Text style={styles.customSoundsLabel}>Sonidos Personalizados</Text>
+                    </View>
+                    {customSounds.map((sound) => (
                     <TouchableOpacity
                       key={sound.id}
                       style={[
@@ -574,9 +578,10 @@ const SettingsScreen = ({ navigation }) => {
                         )}
                       </View>
                     </TouchableOpacity>
-                  ))}
-                </>
-              )}
+                    ))}
+                  </>
+                );
+              })()}
 
               {/* Upload Button */}
               <TouchableOpacity
