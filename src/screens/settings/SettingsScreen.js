@@ -52,6 +52,10 @@ const SettingsScreen = ({ navigation }) => {
   const [saving, setSaving] = useState(false);
   const [uploadingSound, setUploadingSound] = useState(false);
   const [deletingSoundId, setDeletingSoundId] = useState(null);
+  const [playingModalVisible, setPlayingModalVisible] = useState(false);
+  const [currentlyPlayingSound, setCurrentlyPlayingSound] = useState(null);
+  const [playingTime, setPlayingTime] = useState(0);
+  const playingTimerRef = React.useRef(null);
 
   const [profileData, setProfileData] = useState({
     nombre: '',
@@ -66,10 +70,55 @@ const SettingsScreen = ({ navigation }) => {
 
   const [errors, setErrors] = useState({});
 
-  // Play notification sound preview using the utility
-  const playNotificationSound = (soundId) => {
-    notificationSound.preview(soundId, preferences?.notificationVolume || 80);
+  // Stop playing and clear timer
+  const stopPlaying = () => {
+    if (playingTimerRef.current) {
+      clearInterval(playingTimerRef.current);
+      playingTimerRef.current = null;
+    }
+    setPlayingModalVisible(false);
+    setCurrentlyPlayingSound(null);
+    setPlayingTime(0);
+    notificationSound.cleanup();
   };
+
+  // Play notification sound preview using the utility
+  const playNotificationSound = (soundId, customUrl = null) => {
+    // Clear any existing timer
+    if (playingTimerRef.current) {
+      clearInterval(playingTimerRef.current);
+    }
+
+    // Find sound name
+    const builtInSound = NOTIFICATION_SOUNDS.find(s => s.id === soundId);
+    const customSound = (availableSounds || []).find(s => s.id === soundId);
+    const soundName = builtInSound?.name || customSound?.name || customSound?.filename || 'Sonido';
+
+    setCurrentlyPlayingSound({ id: soundId, name: soundName });
+    setPlayingTime(0);
+    setPlayingModalVisible(true);
+
+    notificationSound.preview(soundId, preferences?.notificationVolume || 80, customUrl);
+
+    // Start timer to update elapsed time every second
+    playingTimerRef.current = setInterval(() => {
+      setPlayingTime(prev => prev + 1);
+    }, 1000);
+
+    // Auto-close modal after 5 seconds (most notification sounds are short)
+    setTimeout(() => {
+      stopPlaying();
+    }, 5000);
+  };
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (playingTimerRef.current) {
+        clearInterval(playingTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -532,52 +581,54 @@ const SettingsScreen = ({ navigation }) => {
                       <Text style={styles.customSoundsLabel}>Sonidos Personalizados</Text>
                     </View>
                     {customSounds.map((sound) => (
-                    <TouchableOpacity
-                      key={sound.id}
-                      style={[
-                        styles.soundItem,
-                        preferences?.notificationSound === sound.id && styles.soundItemActive,
-                      ]}
-                      onPress={() => handleSoundChange(sound.id)}
-                    >
-                      <View style={styles.soundItemLeft}>
-                        <Ionicons
-                          name="musical-note-outline"
-                          size={20}
-                          color={preferences?.notificationSound === sound.id ? COLORS.primary : COLORS.gray[500]}
-                        />
-                        <Text
-                          style={[
-                            styles.soundItemText,
-                            preferences?.notificationSound === sound.id && styles.soundItemTextActive,
-                          ]}
-                        >
-                          {sound.name || sound.filename || 'Sonido personalizado'}
-                        </Text>
-                      </View>
-                      <View style={styles.soundItemRight}>
+                      <View
+                        key={sound.id}
+                        style={[
+                          styles.soundItem,
+                          preferences?.notificationSound === sound.id && styles.soundItemActive,
+                        ]}
+                      >
                         <TouchableOpacity
-                          style={styles.testButton}
-                          onPress={() => notificationSound.preview(sound.id, preferences?.notificationVolume || 80, sound.url)}
+                          style={styles.soundItemLeft}
+                          onPress={() => handleSoundChange(sound.id)}
                         >
-                          <Ionicons name="play-circle" size={26} color={COLORS.primary} />
+                          <Ionicons
+                            name="musical-note-outline"
+                            size={20}
+                            color={preferences?.notificationSound === sound.id ? COLORS.primary : COLORS.gray[500]}
+                          />
+                          <Text
+                            style={[
+                              styles.soundItemText,
+                              preferences?.notificationSound === sound.id && styles.soundItemTextActive,
+                            ]}
+                          >
+                            {sound.name || sound.filename || 'Sonido personalizado'}
+                          </Text>
                         </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.deleteButtonInline}
-                          onPress={() => handleDeleteSound(sound.id)}
-                          disabled={deletingSoundId === sound.id}
-                        >
-                          {deletingSoundId === sound.id ? (
-                            <ActivityIndicator size="small" color={COLORS.danger} />
-                          ) : (
-                            <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
+                        <View style={styles.soundItemRight}>
+                          <TouchableOpacity
+                            style={styles.testButton}
+                            onPress={() => playNotificationSound(sound.id, sound.url)}
+                          >
+                            <Ionicons name="play-circle" size={26} color={COLORS.primary} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.deleteButtonInline}
+                            onPress={() => handleDeleteSound(sound.id)}
+                            disabled={deletingSoundId === sound.id}
+                          >
+                            {deletingSoundId === sound.id ? (
+                              <ActivityIndicator size="small" color={COLORS.danger} />
+                            ) : (
+                              <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
+                            )}
+                          </TouchableOpacity>
+                          {preferences?.notificationSound === sound.id && (
+                            <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} />
                           )}
-                        </TouchableOpacity>
-                        {preferences?.notificationSound === sound.id && (
-                          <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} />
-                        )}
+                        </View>
                       </View>
-                    </TouchableOpacity>
                     ))}
                   </>
                 );
@@ -934,6 +985,43 @@ const SettingsScreen = ({ navigation }) => {
           ))}
         </ScrollView>
       </Modal>
+
+      {/* Playing Music Modal */}
+      <Modal
+        visible={playingModalVisible}
+        onClose={stopPlaying}
+        title="Reproduciendo Sonido"
+      >
+        <View style={styles.playingModalContent}>
+          <View style={styles.playingIconContainer}>
+            <Ionicons name="musical-notes" size={48} color={COLORS.primary} />
+          </View>
+          <Text style={styles.playingSoundName}>
+            {currentlyPlayingSound?.name || 'Sonido'}
+          </Text>
+          <View style={styles.playingTimeContainer}>
+            <Text style={styles.playingTimeText}>
+              0:{playingTime.toString().padStart(2, '0')}
+            </Text>
+          </View>
+          <View style={styles.playingProgressBar}>
+            <View style={[styles.playingProgressFill, { width: `${Math.min((playingTime / 5) * 100, 100)}%` }]} />
+          </View>
+          <View style={styles.playingVolumeInfo}>
+            <Ionicons name="volume-high-outline" size={18} color={COLORS.gray[500]} />
+            <Text style={styles.playingVolumeText}>
+              Volumen: {preferences?.notificationVolume ?? 80}%
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.stopButton}
+            onPress={stopPlaying}
+          >
+            <Ionicons name="stop-circle" size={24} color={COLORS.white} />
+            <Text style={styles.stopButtonText}>Detener</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1202,6 +1290,73 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontSize: 14,
     fontWeight: '500',
+  },
+  playingModalContent: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  playingIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: `${COLORS.primary}15`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  playingSoundName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.gray[900],
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  playingTimeContainer: {
+    marginBottom: 8,
+  },
+  playingTimeText: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: COLORS.primary,
+    fontVariant: ['tabular-nums'],
+  },
+  playingProgressBar: {
+    width: '80%',
+    height: 6,
+    backgroundColor: COLORS.gray[200],
+    borderRadius: 3,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  playingProgressFill: {
+    height: '100%',
+    backgroundColor: COLORS.primary,
+    borderRadius: 3,
+  },
+  playingVolumeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 20,
+  },
+  playingVolumeText: {
+    fontSize: 14,
+    color: COLORS.gray[500],
+  },
+  stopButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.danger,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    gap: 8,
+  },
+  stopButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 
