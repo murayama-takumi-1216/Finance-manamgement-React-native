@@ -833,6 +833,33 @@ export const useNotificationsStore = create((set, get) => ({
     }
   },
 
+  uploadSound: async (formData) => {
+    try {
+      const response = await preferencesAPI.uploadSound(formData);
+      const newSound = response.data.sound || response.data;
+      set((state) => ({
+        availableSounds: [...state.availableSounds, newSound],
+      }));
+      return { success: true, sound: newSound };
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || 'Error al subir sonido';
+      return { success: false, error: errorMessage };
+    }
+  },
+
+  deleteSound: async (soundId) => {
+    try {
+      await preferencesAPI.deleteSound(soundId);
+      set((state) => ({
+        availableSounds: state.availableSounds.filter((s) => s.id !== soundId),
+      }));
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || 'Error al eliminar sonido';
+      return { success: false, error: errorMessage };
+    }
+  },
+
   updatePreferences: async (data) => {
     const currentPreferences = get().preferences || DEFAULT_PREFERENCES;
     const newPreferences = { ...currentPreferences, ...data };

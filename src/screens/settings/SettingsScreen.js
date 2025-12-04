@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,12 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
-  Platform,
+  ActivityIndicator,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
+import * as DocumentPicker from 'expo-document-picker';
 import { useAuthStore, useNotificationsStore } from '../../store/useStore';
 import {
   Card,
@@ -21,18 +21,7 @@ import {
   Loading,
 } from '../../components/common';
 import { COLORS } from '../../constants';
-
-const NOTIFICATION_SOUNDS = [
-  { id: 'default', name: 'Por defecto', type: 'builtin' },
-  { id: 'chime', name: 'Campanilla', type: 'builtin' },
-  { id: 'bell', name: 'Campana', type: 'builtin' },
-  { id: 'ping', name: 'Ping', type: 'builtin' },
-  { id: 'pop', name: 'Pop', type: 'builtin' },
-  { id: 'ding', name: 'Ding', type: 'builtin' },
-  { id: 'alert', name: 'Alerta', type: 'builtin' },
-  { id: 'gentle', name: 'Suave', type: 'builtin' },
-  { id: 'none', name: 'Sin sonido', type: 'builtin' },
-];
+import notificationSound, { NOTIFICATION_SOUNDS } from '../../utils/notificationSound';
 
 const TIMEZONES = [
   { value: 'America/New_York', label: 'Nueva York (EST)' },
@@ -52,16 +41,17 @@ const TIMEZONES = [
 
 const SettingsScreen = ({ navigation }) => {
   const { user, logout, updateProfile, changePassword, isLoading } = useAuthStore();
-  const { preferences, fetchPreferences, updatePreferences, availableSounds } = useNotificationsStore();
+  const { preferences, fetchPreferences, updatePreferences, availableSounds, uploadSound, deleteSound, fetchAvailableSounds } = useNotificationsStore();
 
   const [activeTab, setActiveTab] = useState('profile');
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
-  const [soundModalVisible, setSoundModalVisible] = useState(false);
   const [timezoneModalVisible, setTimezoneModalVisible] = useState(false);
   const [quietHoursStartModalVisible, setQuietHoursStartModalVisible] = useState(false);
   const [quietHoursEndModalVisible, setQuietHoursEndModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploadingSound, setUploadingSound] = useState(false);
+  const [deletingSoundId, setDeletingSoundId] = useState(null);
 
   const [profileData, setProfileData] = useState({
     nombre: '',
@@ -75,77 +65,11 @@ const SettingsScreen = ({ navigation }) => {
   });
 
   const [errors, setErrors] = useState({});
-  const soundRef = useRef(null);
 
-  // Play notification sound preview
-  const playNotificationSound = async (soundId) => {
-    if (soundId === 'none') return;
-
-    try {
-      // Stop any currently playing sound
-      if (soundRef.current) {
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-      }
-
-      // Configure audio mode
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-      });
-
-      // Map sound IDs to frequencies and patterns for synthesis
-      const soundConfigs = {
-        default: { frequency: 880, duration: 200, type: 'sine' },
-        chime: { frequency: 1200, duration: 300, type: 'sine' },
-        bell: { frequency: 660, duration: 400, type: 'triangle' },
-        ping: { frequency: 1000, duration: 150, type: 'sine' },
-        pop: { frequency: 400, duration: 100, type: 'square' },
-        ding: { frequency: 800, duration: 250, type: 'sine' },
-        alert: { frequency: 600, duration: 350, type: 'sawtooth' },
-        gentle: { frequency: 500, duration: 400, type: 'sine' },
-      };
-
-      const config = soundConfigs[soundId] || soundConfigs.default;
-
-      // Use a simple beep sound as preview
-      // Note: For production, you might want to use actual sound files
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: `https://www.soundjay.com/buttons/beep-0${Math.floor(Math.random() * 9) + 1}.wav` },
-        { shouldPlay: true, volume: (preferences?.notificationVolume || 80) / 100 }
-      );
-
-      soundRef.current = sound;
-
-      // Auto unload after playing
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.didJustFinish) {
-          sound.unloadAsync();
-          soundRef.current = null;
-        }
-      });
-    } catch (error) {
-      console.log('Error playing sound preview:', error);
-      // Show a toast as fallback
-      Toast.show({
-        type: 'info',
-        text1: 'Vista previa de sonido',
-        text2: `Sonido: ${soundId}`,
-        visibilityTime: 1000,
-      });
-    }
+  // Play notification sound preview using the utility
+  const playNotificationSound = (soundId) => {
+    notificationSound.preview(soundId, preferences?.notificationVolume || 80);
   };
-
-  // Cleanup sound on unmount
-  useEffect(() => {
-    return () => {
-      if (soundRef.current) {
-        soundRef.current.unloadAsync();
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (user) {
@@ -156,9 +80,10 @@ const SettingsScreen = ({ navigation }) => {
     }
   }, [user]);
 
-  // Fetch preferences only on mount
+  // Fetch preferences and available sounds on mount
   useEffect(() => {
     fetchPreferences();
+    fetchAvailableSounds();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -290,7 +215,6 @@ const SettingsScreen = ({ navigation }) => {
 
   const handleSoundChange = async (soundId) => {
     await updatePreferences({ notificationSound: soundId });
-    setSoundModalVisible(false);
   };
 
   const handleTimezoneChange = async (timezone) => {
@@ -308,10 +232,78 @@ const SettingsScreen = ({ navigation }) => {
     setQuietHoursEndModalVisible(false);
   };
 
-  const getCurrentSoundLabel = () => {
-    const allSounds = [...NOTIFICATION_SOUNDS, ...(availableSounds || [])];
-    const sound = allSounds.find(s => s.id === (preferences?.notificationSound || 'default'));
-    return sound?.name || 'Por defecto';
+  const handleUploadSound = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'audio/*',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const file = result.assets[0];
+      if (!file) return;
+
+      setUploadingSound(true);
+
+      const formData = new FormData();
+      formData.append('sound', {
+        uri: file.uri,
+        type: file.mimeType || 'audio/mpeg',
+        name: file.name,
+      });
+
+      const uploadResult = await uploadSound(formData);
+
+      if (uploadResult.success) {
+        Toast.show({
+          type: 'success',
+          text1: 'Sonido subido',
+          text2: 'El sonido se ha subido correctamente',
+        });
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: uploadResult.error,
+        });
+      }
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'No se pudo subir el sonido',
+      });
+    } finally {
+      setUploadingSound(false);
+    }
+  };
+
+  const handleDeleteSound = async (soundId) => {
+    setDeletingSoundId(soundId);
+    try {
+      const result = await deleteSound(soundId);
+      if (result.success) {
+        // If the deleted sound was selected, reset to default
+        if (preferences?.notificationSound === soundId) {
+          await updatePreferences({ notificationSound: 'default' });
+        }
+        Toast.show({
+          type: 'success',
+          text1: 'Sonido eliminado',
+        });
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: result.error,
+        });
+      }
+    } finally {
+      setDeletingSoundId(null);
+    }
   };
 
   const getCurrentTimezoneLabel = () => {
@@ -448,108 +440,10 @@ const SettingsScreen = ({ navigation }) => {
         {/* Notifications Tab */}
         {activeTab === 'notifications' && (
           <View>
-            {/* General Notifications */}
-            <Card style={[styles.optionsCard, { marginTop: 0 }]}>
-              <View style={styles.switchItem}>
-                <View style={styles.optionLeft}>
-                  <Ionicons
-                    name="notifications-outline"
-                    size={22}
-                    color={COLORS.gray[600]}
-                  />
-                  <View style={styles.optionTextContainer}>
-                    <Text style={styles.optionText}>Notificaciones</Text>
-                    <Text style={styles.optionSubtext}>
-                      Activar/desactivar todas las notificaciones
-                    </Text>
-                  </View>
-                </View>
-                <Switch
-                  value={preferences?.notificationsEnabled ?? true}
-                  onValueChange={handleToggleNotifications}
-                  trackColor={{ false: COLORS.gray[300], true: COLORS.primary }}
-                  thumbColor={COLORS.white}
-                />
-              </View>
-
-              <View style={styles.divider} />
-
-              <View style={styles.switchItem}>
-                <View style={styles.optionLeft}>
-                  <Ionicons
-                    name="mail-outline"
-                    size={22}
-                    color={COLORS.gray[600]}
-                  />
-                  <View style={styles.optionTextContainer}>
-                    <Text style={styles.optionText}>Notificaciones por Email</Text>
-                    <Text style={styles.optionSubtext}>
-                      Recibir notificaciones por correo
-                    </Text>
-                  </View>
-                </View>
-                <Switch
-                  value={preferences?.emailNotifications ?? true}
-                  onValueChange={handleToggleEmailNotifications}
-                  trackColor={{ false: COLORS.gray[300], true: COLORS.primary }}
-                  thumbColor={COLORS.white}
-                />
-              </View>
-
-              <View style={styles.divider} />
-
-              <View style={styles.switchItem}>
-                <View style={styles.optionLeft}>
-                  <Ionicons
-                    name="phone-portrait-outline"
-                    size={22}
-                    color={COLORS.gray[600]}
-                  />
-                  <View style={styles.optionTextContainer}>
-                    <Text style={styles.optionText}>Notificaciones Push</Text>
-                    <Text style={styles.optionSubtext}>
-                      Recibir alertas en el dispositivo
-                    </Text>
-                  </View>
-                </View>
-                <Switch
-                  value={preferences?.browserNotifications ?? true}
-                  onValueChange={handleToggleBrowserNotifications}
-                  trackColor={{ false: COLORS.gray[300], true: COLORS.primary }}
-                  thumbColor={COLORS.white}
-                />
-              </View>
-            </Card>
-
             {/* Sound Settings */}
-            <Text style={styles.sectionTitle}>Sonido</Text>
+            <Text style={[styles.sectionTitle, { marginTop: 0 }]}>Sonido</Text>
             <Card style={styles.optionsCard}>
-              <TouchableOpacity
-                style={styles.optionItem}
-                onPress={() => setSoundModalVisible(true)}
-              >
-                <View style={styles.optionLeft}>
-                  <Ionicons
-                    name="musical-notes-outline"
-                    size={22}
-                    color={COLORS.gray[600]}
-                  />
-                  <View style={styles.optionTextContainer}>
-                    <Text style={styles.optionText}>Sonido de Notificación</Text>
-                    <Text style={styles.optionSubtext}>
-                      {getCurrentSoundLabel()}
-                    </Text>
-                  </View>
-                </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color={COLORS.gray[400]}
-                />
-              </TouchableOpacity>
-
-              <View style={styles.divider} />
-
+              {/* Volume Slider */}
               <View style={styles.sliderItem}>
                 <View style={styles.optionLeft}>
                   <Ionicons
@@ -578,6 +472,127 @@ const SettingsScreen = ({ navigation }) => {
                   thumbTintColor={COLORS.primary}
                 />
               </View>
+
+              <View style={styles.divider} />
+
+              {/* Sound Selection Label */}
+              <View style={styles.soundSelectionHeader}>
+                <Text style={styles.soundSelectionTitle}>Sonido de Notificación</Text>
+              </View>
+
+              {/* Built-in Sounds */}
+              {NOTIFICATION_SOUNDS.map((sound) => (
+                <TouchableOpacity
+                  key={sound.id}
+                  style={[
+                    styles.soundItem,
+                    (preferences?.notificationSound || 'default') === sound.id && styles.soundItemActive,
+                  ]}
+                  onPress={() => handleSoundChange(sound.id)}
+                >
+                  <View style={styles.soundItemLeft}>
+                    <Ionicons
+                      name={sound.id === 'none' ? 'volume-mute-outline' : 'musical-note-outline'}
+                      size={20}
+                      color={(preferences?.notificationSound || 'default') === sound.id ? COLORS.primary : COLORS.gray[500]}
+                    />
+                    <Text
+                      style={[
+                        styles.soundItemText,
+                        (preferences?.notificationSound || 'default') === sound.id && styles.soundItemTextActive,
+                      ]}
+                    >
+                      {sound.name}
+                    </Text>
+                  </View>
+                  <View style={styles.soundItemRight}>
+                    {sound.id !== 'none' && (
+                      <TouchableOpacity
+                        style={styles.testButton}
+                        onPress={() => playNotificationSound(sound.id)}
+                      >
+                        <Ionicons name="play-circle" size={26} color={COLORS.primary} />
+                      </TouchableOpacity>
+                    )}
+                    {(preferences?.notificationSound || 'default') === sound.id && (
+                      <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} />
+                    )}
+                  </View>
+                </TouchableOpacity>
+              ))}
+
+              {/* Custom Sounds */}
+              {availableSounds && availableSounds.length > 0 && (
+                <>
+                  <View style={styles.customSoundsDivider}>
+                    <Text style={styles.customSoundsLabel}>Sonidos Personalizados</Text>
+                  </View>
+                  {availableSounds.map((sound) => (
+                    <TouchableOpacity
+                      key={sound.id}
+                      style={[
+                        styles.soundItem,
+                        preferences?.notificationSound === sound.id && styles.soundItemActive,
+                      ]}
+                      onPress={() => handleSoundChange(sound.id)}
+                    >
+                      <View style={styles.soundItemLeft}>
+                        <Ionicons
+                          name="musical-note-outline"
+                          size={20}
+                          color={preferences?.notificationSound === sound.id ? COLORS.primary : COLORS.gray[500]}
+                        />
+                        <Text
+                          style={[
+                            styles.soundItemText,
+                            preferences?.notificationSound === sound.id && styles.soundItemTextActive,
+                          ]}
+                        >
+                          {sound.name || sound.filename || 'Sonido personalizado'}
+                        </Text>
+                      </View>
+                      <View style={styles.soundItemRight}>
+                        <TouchableOpacity
+                          style={styles.testButton}
+                          onPress={() => notificationSound.preview(sound.id, preferences?.notificationVolume || 80, sound.url)}
+                        >
+                          <Ionicons name="play-circle" size={26} color={COLORS.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.deleteButtonInline}
+                          onPress={() => handleDeleteSound(sound.id)}
+                          disabled={deletingSoundId === sound.id}
+                        >
+                          {deletingSoundId === sound.id ? (
+                            <ActivityIndicator size="small" color={COLORS.danger} />
+                          ) : (
+                            <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
+                          )}
+                        </TouchableOpacity>
+                        {preferences?.notificationSound === sound.id && (
+                          <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} />
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
+
+              {/* Upload Button */}
+              <TouchableOpacity
+                style={styles.uploadButtonInline}
+                onPress={handleUploadSound}
+                disabled={uploadingSound}
+              >
+                {uploadingSound ? (
+                  <ActivityIndicator size="small" color={COLORS.primary} />
+                ) : (
+                  <>
+                    <Ionicons name="cloud-upload-outline" size={20} color={COLORS.primary} />
+                    <Text style={styles.uploadButtonInlineText}>Subir Sonido Personalizado</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </Card>
 
             {/* Quiet Hours */}
@@ -802,55 +817,6 @@ const SettingsScreen = ({ navigation }) => {
             style={styles.modalButton}
           />
         </View>
-      </Modal>
-
-      {/* Sound Selection Modal */}
-      <Modal
-        visible={soundModalVisible}
-        onClose={() => setSoundModalVisible(false)}
-        title="Sonido de Notificación"
-      >
-        <ScrollView style={styles.modalScrollView}>
-          {NOTIFICATION_SOUNDS.map((sound) => (
-            <View
-              key={sound.id}
-              style={[
-                styles.soundOption,
-                preferences?.notificationSound === sound.id && styles.soundOptionActive,
-              ]}
-            >
-              <TouchableOpacity
-                style={styles.soundOptionContent}
-                onPress={() => handleSoundChange(sound.id)}
-              >
-                <Ionicons
-                  name={sound.id === 'none' ? 'volume-mute-outline' : 'musical-note-outline'}
-                  size={22}
-                  color={preferences?.notificationSound === sound.id ? COLORS.primary : COLORS.gray[600]}
-                />
-                <Text
-                  style={[
-                    styles.soundOptionText,
-                    preferences?.notificationSound === sound.id && styles.soundOptionTextActive,
-                  ]}
-                >
-                  {sound.name}
-                </Text>
-                {(preferences?.notificationSound || 'default') === sound.id && (
-                  <Ionicons name="checkmark" size={22} color={COLORS.primary} />
-                )}
-              </TouchableOpacity>
-              {sound.id !== 'none' && (
-                <TouchableOpacity
-                  style={styles.playButton}
-                  onPress={() => playNotificationSound(sound.id)}
-                >
-                  <Ionicons name="play-circle" size={28} color={COLORS.primary} />
-                </TouchableOpacity>
-              )}
-            </View>
-          ))}
-        </ScrollView>
       </Modal>
 
       {/* Timezone Selection Modal */}
@@ -1149,6 +1115,88 @@ const styles = StyleSheet.create({
   playButton: {
     padding: 8,
     marginLeft: 8,
+  },
+  soundSelectionHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  soundSelectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.gray[700],
+  },
+  soundItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginHorizontal: 8,
+    marginVertical: 2,
+    borderRadius: 8,
+    backgroundColor: COLORS.gray[50],
+  },
+  soundItemActive: {
+    backgroundColor: `${COLORS.primary}10`,
+    borderWidth: 1,
+    borderColor: `${COLORS.primary}30`,
+  },
+  soundItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  soundItemText: {
+    fontSize: 14,
+    color: COLORS.gray[700],
+  },
+  soundItemTextActive: {
+    color: COLORS.primary,
+    fontWeight: '500',
+  },
+  soundItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  testButton: {
+    padding: 4,
+  },
+  customSoundsDivider: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  customSoundsLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.gray[500],
+    textTransform: 'uppercase',
+  },
+  deleteButtonInline: {
+    padding: 4,
+  },
+  uploadButtonInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 8,
+    marginTop: 12,
+    marginBottom: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderStyle: 'dashed',
+    gap: 8,
+  },
+  uploadButtonInlineText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 
