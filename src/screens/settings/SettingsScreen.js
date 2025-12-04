@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
+  Platform,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
+import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { useAuthStore, useNotificationsStore } from '../../store/useStore';
@@ -20,22 +23,44 @@ import {
 import { COLORS } from '../../constants';
 
 const NOTIFICATION_SOUNDS = [
-  { value: 'default', label: 'Por defecto' },
-  { value: 'chime', label: 'Campanilla' },
-  { value: 'bell', label: 'Campana' },
-  { value: 'ding', label: 'Ding' },
-  { value: 'pop', label: 'Pop' },
-  { value: 'none', label: 'Sin sonido' },
+  { id: 'default', name: 'Por defecto', type: 'builtin' },
+  { id: 'chime', name: 'Campanilla', type: 'builtin' },
+  { id: 'bell', name: 'Campana', type: 'builtin' },
+  { id: 'ping', name: 'Ping', type: 'builtin' },
+  { id: 'pop', name: 'Pop', type: 'builtin' },
+  { id: 'ding', name: 'Ding', type: 'builtin' },
+  { id: 'alert', name: 'Alerta', type: 'builtin' },
+  { id: 'gentle', name: 'Suave', type: 'builtin' },
+  { id: 'none', name: 'Sin sonido', type: 'builtin' },
+];
+
+const TIMEZONES = [
+  { value: 'America/New_York', label: 'Nueva York (EST)' },
+  { value: 'America/Chicago', label: 'Chicago (CST)' },
+  { value: 'America/Denver', label: 'Denver (MST)' },
+  { value: 'America/Los_Angeles', label: 'Los Angeles (PST)' },
+  { value: 'America/Mexico_City', label: 'Ciudad de México' },
+  { value: 'America/Bogota', label: 'Bogotá' },
+  { value: 'America/Lima', label: 'Lima' },
+  { value: 'America/Santiago', label: 'Santiago' },
+  { value: 'America/Buenos_Aires', label: 'Buenos Aires' },
+  { value: 'Europe/Madrid', label: 'Madrid' },
+  { value: 'Europe/London', label: 'Londres' },
+  { value: 'Europe/Paris', label: 'París' },
+  { value: 'UTC', label: 'UTC' },
 ];
 
 const SettingsScreen = ({ navigation }) => {
   const { user, logout, updateProfile, changePassword, isLoading } = useAuthStore();
-  const { preferences, fetchPreferences, updatePreferences } = useNotificationsStore();
+  const { preferences, fetchPreferences, updatePreferences, availableSounds } = useNotificationsStore();
 
   const [activeTab, setActiveTab] = useState('profile');
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [soundModalVisible, setSoundModalVisible] = useState(false);
+  const [timezoneModalVisible, setTimezoneModalVisible] = useState(false);
+  const [quietHoursStartModalVisible, setQuietHoursStartModalVisible] = useState(false);
+  const [quietHoursEndModalVisible, setQuietHoursEndModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [profileData, setProfileData] = useState({
@@ -50,6 +75,77 @@ const SettingsScreen = ({ navigation }) => {
   });
 
   const [errors, setErrors] = useState({});
+  const soundRef = useRef(null);
+
+  // Play notification sound preview
+  const playNotificationSound = async (soundId) => {
+    if (soundId === 'none') return;
+
+    try {
+      // Stop any currently playing sound
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
+      }
+
+      // Configure audio mode
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+      });
+
+      // Map sound IDs to frequencies and patterns for synthesis
+      const soundConfigs = {
+        default: { frequency: 880, duration: 200, type: 'sine' },
+        chime: { frequency: 1200, duration: 300, type: 'sine' },
+        bell: { frequency: 660, duration: 400, type: 'triangle' },
+        ping: { frequency: 1000, duration: 150, type: 'sine' },
+        pop: { frequency: 400, duration: 100, type: 'square' },
+        ding: { frequency: 800, duration: 250, type: 'sine' },
+        alert: { frequency: 600, duration: 350, type: 'sawtooth' },
+        gentle: { frequency: 500, duration: 400, type: 'sine' },
+      };
+
+      const config = soundConfigs[soundId] || soundConfigs.default;
+
+      // Use a simple beep sound as preview
+      // Note: For production, you might want to use actual sound files
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: `https://www.soundjay.com/buttons/beep-0${Math.floor(Math.random() * 9) + 1}.wav` },
+        { shouldPlay: true, volume: (preferences?.notificationVolume || 80) / 100 }
+      );
+
+      soundRef.current = sound;
+
+      // Auto unload after playing
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) {
+          sound.unloadAsync();
+          soundRef.current = null;
+        }
+      });
+    } catch (error) {
+      console.log('Error playing sound preview:', error);
+      // Show a toast as fallback
+      Toast.show({
+        type: 'info',
+        text1: 'Vista previa de sonido',
+        text2: `Sonido: ${soundId}`,
+        visibilityTime: 1000,
+      });
+    }
+  };
+
+  // Cleanup sound on unmount
+  useEffect(() => {
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -171,22 +267,56 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
+  // Preference handlers
   const handleToggleNotifications = async (value) => {
-    await updatePreferences({ notificaciones_activas: value });
+    await updatePreferences({ notificationsEnabled: value });
   };
 
   const handleToggleEmailNotifications = async (value) => {
-    await updatePreferences({ notificaciones_email: value });
+    await updatePreferences({ emailNotifications: value });
   };
 
-  const handleSoundChange = async (soundValue) => {
-    await updatePreferences({ sonido_notificacion: soundValue });
+  const handleToggleBrowserNotifications = async (value) => {
+    await updatePreferences({ browserNotifications: value });
+  };
+
+  const handleToggleQuietHours = async (value) => {
+    await updatePreferences({ quietHoursEnabled: value });
+  };
+
+  const handleVolumeChange = async (value) => {
+    await updatePreferences({ notificationVolume: Math.round(value) });
+  };
+
+  const handleSoundChange = async (soundId) => {
+    await updatePreferences({ notificationSound: soundId });
     setSoundModalVisible(false);
   };
 
+  const handleTimezoneChange = async (timezone) => {
+    await updatePreferences({ timezone });
+    setTimezoneModalVisible(false);
+  };
+
+  const handleQuietHoursStartChange = async (time) => {
+    await updatePreferences({ quietHoursStart: time });
+    setQuietHoursStartModalVisible(false);
+  };
+
+  const handleQuietHoursEndChange = async (time) => {
+    await updatePreferences({ quietHoursEnd: time });
+    setQuietHoursEndModalVisible(false);
+  };
+
   const getCurrentSoundLabel = () => {
-    const sound = NOTIFICATION_SOUNDS.find(s => s.value === (preferences?.sonido_notificacion || 'default'));
-    return sound?.label || 'Por defecto';
+    const allSounds = [...NOTIFICATION_SOUNDS, ...(availableSounds || [])];
+    const sound = allSounds.find(s => s.id === (preferences?.notificationSound || 'default'));
+    return sound?.name || 'Por defecto';
+  };
+
+  const getCurrentTimezoneLabel = () => {
+    const tz = TIMEZONES.find(t => t.value === (preferences?.timezone || 'UTC'));
+    return tz?.label || preferences?.timezone || 'UTC';
   };
 
   const tabs = [
@@ -204,6 +334,11 @@ const SettingsScreen = ({ navigation }) => {
       .toUpperCase()
       .substring(0, 2);
   };
+
+  const HOURS = Array.from({ length: 24 }, (_, i) => {
+    const hour = i.toString().padStart(2, '0');
+    return { value: `${hour}:00`, label: `${hour}:00` };
+  });
 
   return (
     <View style={styles.container}>
@@ -313,7 +448,8 @@ const SettingsScreen = ({ navigation }) => {
         {/* Notifications Tab */}
         {activeTab === 'notifications' && (
           <View>
-            <Card style={styles.optionsCard}>
+            {/* General Notifications */}
+            <Card style={[styles.optionsCard, { marginTop: 0 }]}>
               <View style={styles.switchItem}>
                 <View style={styles.optionLeft}>
                   <Ionicons
@@ -321,15 +457,15 @@ const SettingsScreen = ({ navigation }) => {
                     size={22}
                     color={COLORS.gray[600]}
                   />
-                  <View>
-                    <Text style={styles.optionText}>Notificaciones Push</Text>
+                  <View style={styles.optionTextContainer}>
+                    <Text style={styles.optionText}>Notificaciones</Text>
                     <Text style={styles.optionSubtext}>
-                      Recibir alertas en el dispositivo
+                      Activar/desactivar todas las notificaciones
                     </Text>
                   </View>
                 </View>
                 <Switch
-                  value={preferences?.notificaciones_activas ?? true}
+                  value={preferences?.notificationsEnabled ?? true}
                   onValueChange={handleToggleNotifications}
                   trackColor={{ false: COLORS.gray[300], true: COLORS.primary }}
                   thumbColor={COLORS.white}
@@ -345,15 +481,15 @@ const SettingsScreen = ({ navigation }) => {
                     size={22}
                     color={COLORS.gray[600]}
                   />
-                  <View>
+                  <View style={styles.optionTextContainer}>
                     <Text style={styles.optionText}>Notificaciones por Email</Text>
                     <Text style={styles.optionSubtext}>
-                      Recibir resúmenes por correo
+                      Recibir notificaciones por correo
                     </Text>
                   </View>
                 </View>
                 <Switch
-                  value={preferences?.notificaciones_email ?? false}
+                  value={preferences?.emailNotifications ?? true}
                   onValueChange={handleToggleEmailNotifications}
                   trackColor={{ false: COLORS.gray[300], true: COLORS.primary }}
                   thumbColor={COLORS.white}
@@ -362,6 +498,32 @@ const SettingsScreen = ({ navigation }) => {
 
               <View style={styles.divider} />
 
+              <View style={styles.switchItem}>
+                <View style={styles.optionLeft}>
+                  <Ionicons
+                    name="phone-portrait-outline"
+                    size={22}
+                    color={COLORS.gray[600]}
+                  />
+                  <View style={styles.optionTextContainer}>
+                    <Text style={styles.optionText}>Notificaciones Push</Text>
+                    <Text style={styles.optionSubtext}>
+                      Recibir alertas en el dispositivo
+                    </Text>
+                  </View>
+                </View>
+                <Switch
+                  value={preferences?.browserNotifications ?? true}
+                  onValueChange={handleToggleBrowserNotifications}
+                  trackColor={{ false: COLORS.gray[300], true: COLORS.primary }}
+                  thumbColor={COLORS.white}
+                />
+              </View>
+            </Card>
+
+            {/* Sound Settings */}
+            <Text style={styles.sectionTitle}>Sonido</Text>
+            <Card style={styles.optionsCard}>
               <TouchableOpacity
                 style={styles.optionItem}
                 onPress={() => setSoundModalVisible(true)}
@@ -372,7 +534,7 @@ const SettingsScreen = ({ navigation }) => {
                     size={22}
                     color={COLORS.gray[600]}
                   />
-                  <View>
+                  <View style={styles.optionTextContainer}>
                     <Text style={styles.optionText}>Sonido de Notificación</Text>
                     <Text style={styles.optionSubtext}>
                       {getCurrentSoundLabel()}
@@ -385,30 +547,147 @@ const SettingsScreen = ({ navigation }) => {
                   color={COLORS.gray[400]}
                 />
               </TouchableOpacity>
+
+              <View style={styles.divider} />
+
+              <View style={styles.sliderItem}>
+                <View style={styles.optionLeft}>
+                  <Ionicons
+                    name="volume-high-outline"
+                    size={22}
+                    color={COLORS.gray[600]}
+                  />
+                  <View style={styles.optionTextContainer}>
+                    <Text style={styles.optionText}>Volumen</Text>
+                    <Text style={styles.optionSubtext}>
+                      {preferences?.notificationVolume ?? 80}%
+                    </Text>
+                  </View>
+                </View>
+              </View>
+              <View style={styles.sliderContainer}>
+                <Slider
+                  style={styles.slider}
+                  minimumValue={0}
+                  maximumValue={100}
+                  step={5}
+                  value={preferences?.notificationVolume ?? 80}
+                  onSlidingComplete={handleVolumeChange}
+                  minimumTrackTintColor={COLORS.primary}
+                  maximumTrackTintColor={COLORS.gray[300]}
+                  thumbTintColor={COLORS.primary}
+                />
+              </View>
             </Card>
 
+            {/* Quiet Hours */}
+            <Text style={styles.sectionTitle}>Horario Silencioso</Text>
             <Card style={styles.optionsCard}>
               <View style={styles.switchItem}>
                 <View style={styles.optionLeft}>
                   <Ionicons
-                    name="phone-portrait-outline"
+                    name="moon-outline"
                     size={22}
                     color={COLORS.gray[600]}
                   />
-                  <View>
-                    <Text style={styles.optionText}>Vibración</Text>
+                  <View style={styles.optionTextContainer}>
+                    <Text style={styles.optionText}>Activar Horario Silencioso</Text>
                     <Text style={styles.optionSubtext}>
-                      Vibrar al recibir notificaciones
+                      No recibir notificaciones durante este horario
                     </Text>
                   </View>
                 </View>
                 <Switch
-                  value={preferences?.vibracion ?? true}
-                  onValueChange={(value) => updatePreferences({ vibracion: value })}
+                  value={preferences?.quietHoursEnabled ?? false}
+                  onValueChange={handleToggleQuietHours}
                   trackColor={{ false: COLORS.gray[300], true: COLORS.primary }}
                   thumbColor={COLORS.white}
                 />
               </View>
+
+              {preferences?.quietHoursEnabled && (
+                <>
+                  <View style={styles.divider} />
+
+                  <TouchableOpacity
+                    style={styles.optionItem}
+                    onPress={() => setQuietHoursStartModalVisible(true)}
+                  >
+                    <View style={styles.optionLeft}>
+                      <Ionicons
+                        name="time-outline"
+                        size={22}
+                        color={COLORS.gray[600]}
+                      />
+                      <View style={styles.optionTextContainer}>
+                        <Text style={styles.optionText}>Hora de Inicio</Text>
+                        <Text style={styles.optionSubtext}>
+                          {preferences?.quietHoursStart || '22:00'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={20}
+                      color={COLORS.gray[400]}
+                    />
+                  </TouchableOpacity>
+
+                  <View style={styles.divider} />
+
+                  <TouchableOpacity
+                    style={styles.optionItem}
+                    onPress={() => setQuietHoursEndModalVisible(true)}
+                  >
+                    <View style={styles.optionLeft}>
+                      <Ionicons
+                        name="time-outline"
+                        size={22}
+                        color={COLORS.gray[600]}
+                      />
+                      <View style={styles.optionTextContainer}>
+                        <Text style={styles.optionText}>Hora de Fin</Text>
+                        <Text style={styles.optionSubtext}>
+                          {preferences?.quietHoursEnd || '08:00'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={20}
+                      color={COLORS.gray[400]}
+                    />
+                  </TouchableOpacity>
+                </>
+              )}
+            </Card>
+
+            {/* Timezone */}
+            <Text style={styles.sectionTitle}>Zona Horaria</Text>
+            <Card style={styles.optionsCard}>
+              <TouchableOpacity
+                style={styles.optionItem}
+                onPress={() => setTimezoneModalVisible(true)}
+              >
+                <View style={styles.optionLeft}>
+                  <Ionicons
+                    name="globe-outline"
+                    size={22}
+                    color={COLORS.gray[600]}
+                  />
+                  <View style={styles.optionTextContainer}>
+                    <Text style={styles.optionText}>Zona Horaria</Text>
+                    <Text style={styles.optionSubtext}>
+                      {getCurrentTimezoneLabel()}
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={COLORS.gray[400]}
+                />
+              </TouchableOpacity>
             </Card>
           </View>
         )}
@@ -531,33 +810,158 @@ const SettingsScreen = ({ navigation }) => {
         onClose={() => setSoundModalVisible(false)}
         title="Sonido de Notificación"
       >
-        {NOTIFICATION_SOUNDS.map((sound) => (
-          <TouchableOpacity
-            key={sound.value}
-            style={[
-              styles.soundOption,
-              preferences?.sonido_notificacion === sound.value && styles.soundOptionActive,
-            ]}
-            onPress={() => handleSoundChange(sound.value)}
-          >
-            <Ionicons
-              name={sound.value === 'none' ? 'volume-mute-outline' : 'musical-note-outline'}
-              size={22}
-              color={preferences?.sonido_notificacion === sound.value ? COLORS.primary : COLORS.gray[600]}
-            />
-            <Text
+        <ScrollView style={styles.modalScrollView}>
+          {NOTIFICATION_SOUNDS.map((sound) => (
+            <View
+              key={sound.id}
               style={[
-                styles.soundOptionText,
-                preferences?.sonido_notificacion === sound.value && styles.soundOptionTextActive,
+                styles.soundOption,
+                preferences?.notificationSound === sound.id && styles.soundOptionActive,
               ]}
             >
-              {sound.label}
-            </Text>
-            {(preferences?.sonido_notificacion || 'default') === sound.value && (
-              <Ionicons name="checkmark" size={22} color={COLORS.primary} />
-            )}
-          </TouchableOpacity>
-        ))}
+              <TouchableOpacity
+                style={styles.soundOptionContent}
+                onPress={() => handleSoundChange(sound.id)}
+              >
+                <Ionicons
+                  name={sound.id === 'none' ? 'volume-mute-outline' : 'musical-note-outline'}
+                  size={22}
+                  color={preferences?.notificationSound === sound.id ? COLORS.primary : COLORS.gray[600]}
+                />
+                <Text
+                  style={[
+                    styles.soundOptionText,
+                    preferences?.notificationSound === sound.id && styles.soundOptionTextActive,
+                  ]}
+                >
+                  {sound.name}
+                </Text>
+                {(preferences?.notificationSound || 'default') === sound.id && (
+                  <Ionicons name="checkmark" size={22} color={COLORS.primary} />
+                )}
+              </TouchableOpacity>
+              {sound.id !== 'none' && (
+                <TouchableOpacity
+                  style={styles.playButton}
+                  onPress={() => playNotificationSound(sound.id)}
+                >
+                  <Ionicons name="play-circle" size={28} color={COLORS.primary} />
+                </TouchableOpacity>
+              )}
+            </View>
+          ))}
+        </ScrollView>
+      </Modal>
+
+      {/* Timezone Selection Modal */}
+      <Modal
+        visible={timezoneModalVisible}
+        onClose={() => setTimezoneModalVisible(false)}
+        title="Zona Horaria"
+      >
+        <ScrollView style={styles.modalScrollView}>
+          {TIMEZONES.map((tz) => (
+            <TouchableOpacity
+              key={tz.value}
+              style={[
+                styles.soundOption,
+                preferences?.timezone === tz.value && styles.soundOptionActive,
+              ]}
+              onPress={() => handleTimezoneChange(tz.value)}
+            >
+              <Ionicons
+                name="globe-outline"
+                size={22}
+                color={preferences?.timezone === tz.value ? COLORS.primary : COLORS.gray[600]}
+              />
+              <Text
+                style={[
+                  styles.soundOptionText,
+                  preferences?.timezone === tz.value && styles.soundOptionTextActive,
+                ]}
+              >
+                {tz.label}
+              </Text>
+              {preferences?.timezone === tz.value && (
+                <Ionicons name="checkmark" size={22} color={COLORS.primary} />
+              )}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </Modal>
+
+      {/* Quiet Hours Start Modal */}
+      <Modal
+        visible={quietHoursStartModalVisible}
+        onClose={() => setQuietHoursStartModalVisible(false)}
+        title="Hora de Inicio"
+      >
+        <ScrollView style={styles.modalScrollView}>
+          {HOURS.map((hour) => (
+            <TouchableOpacity
+              key={hour.value}
+              style={[
+                styles.soundOption,
+                preferences?.quietHoursStart === hour.value && styles.soundOptionActive,
+              ]}
+              onPress={() => handleQuietHoursStartChange(hour.value)}
+            >
+              <Ionicons
+                name="time-outline"
+                size={22}
+                color={preferences?.quietHoursStart === hour.value ? COLORS.primary : COLORS.gray[600]}
+              />
+              <Text
+                style={[
+                  styles.soundOptionText,
+                  preferences?.quietHoursStart === hour.value && styles.soundOptionTextActive,
+                ]}
+              >
+                {hour.label}
+              </Text>
+              {preferences?.quietHoursStart === hour.value && (
+                <Ionicons name="checkmark" size={22} color={COLORS.primary} />
+              )}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </Modal>
+
+      {/* Quiet Hours End Modal */}
+      <Modal
+        visible={quietHoursEndModalVisible}
+        onClose={() => setQuietHoursEndModalVisible(false)}
+        title="Hora de Fin"
+      >
+        <ScrollView style={styles.modalScrollView}>
+          {HOURS.map((hour) => (
+            <TouchableOpacity
+              key={hour.value}
+              style={[
+                styles.soundOption,
+                preferences?.quietHoursEnd === hour.value && styles.soundOptionActive,
+              ]}
+              onPress={() => handleQuietHoursEndChange(hour.value)}
+            >
+              <Ionicons
+                name="time-outline"
+                size={22}
+                color={preferences?.quietHoursEnd === hour.value ? COLORS.primary : COLORS.gray[600]}
+              />
+              <Text
+                style={[
+                  styles.soundOptionText,
+                  preferences?.quietHoursEnd === hour.value && styles.soundOptionTextActive,
+                ]}
+              >
+                {hour.label}
+              </Text>
+              {preferences?.quietHoursEnd === hour.value && (
+                <Ionicons name="checkmark" size={22} color={COLORS.primary} />
+              )}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </Modal>
     </View>
   );
@@ -598,6 +1002,15 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.gray[500],
+    marginBottom: 8,
+    marginTop: 16,
+    marginLeft: 4,
+    textTransform: 'uppercase',
+  },
   avatarSection: {
     alignItems: 'center',
     paddingVertical: 24,
@@ -627,7 +1040,7 @@ const styles = StyleSheet.create({
     color: COLORS.gray[500],
   },
   optionsCard: {
-    marginBottom: 16,
+    marginBottom: 8,
     padding: 0,
     overflow: 'hidden',
   },
@@ -646,6 +1059,9 @@ const styles = StyleSheet.create({
     gap: 12,
     flex: 1,
   },
+  optionTextContainer: {
+    flex: 1,
+  },
   optionText: {
     fontSize: 16,
     color: COLORS.gray[900],
@@ -660,6 +1076,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
+  },
+  sliderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  sliderContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  slider: {
+    width: '100%',
+    height: 40,
   },
   divider: {
     height: 1,
@@ -682,19 +1114,28 @@ const styles = StyleSheet.create({
   modalButton: {
     flex: 1,
   },
+  modalScrollView: {
+    maxHeight: 400,
+  },
   soundOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: 12,
+    paddingLeft: 16,
     borderRadius: 12,
     marginBottom: 8,
     backgroundColor: COLORS.gray[50],
-    gap: 12,
   },
   soundOptionActive: {
     backgroundColor: `${COLORS.primary}15`,
     borderWidth: 1,
     borderColor: COLORS.primary,
+  },
+  soundOptionContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   soundOptionText: {
     flex: 1,
@@ -704,6 +1145,10 @@ const styles = StyleSheet.create({
   soundOptionTextActive: {
     color: COLORS.primary,
     fontWeight: '500',
+  },
+  playButton: {
+    padding: 8,
+    marginLeft: 8,
   },
 });
 

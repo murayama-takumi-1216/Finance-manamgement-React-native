@@ -715,10 +715,15 @@ export const useEventsStore = create((set, get) => ({
 
 // Notifications Store
 const DEFAULT_PREFERENCES = {
-  notificaciones_activas: true,
-  notificaciones_email: false,
-  sonido_notificacion: 'default',
-  vibracion: true,
+  notificationsEnabled: true,
+  notificationSound: 'default',
+  notificationVolume: 80,
+  quietHoursEnabled: false,
+  quietHoursStart: '22:00',
+  quietHoursEnd: '08:00',
+  emailNotifications: true,
+  browserNotifications: true,
+  timezone: 'UTC',
 };
 
 export const useNotificationsStore = create((set, get) => ({
@@ -727,6 +732,7 @@ export const useNotificationsStore = create((set, get) => ({
   isLoading: false,
   error: null,
   preferences: DEFAULT_PREFERENCES,
+  availableSounds: [],
 
   fetchNotifications: async (params = {}) => {
     try {
@@ -734,6 +740,7 @@ export const useNotificationsStore = create((set, get) => ({
       const response = await notificationsAPI.getAll(params);
       set({
         notifications: response.data.notifications || response.data,
+        unreadCount: response.data.unreadCount || 0,
         isLoading: false,
       });
     } catch (error) {
@@ -807,26 +814,37 @@ export const useNotificationsStore = create((set, get) => ({
     try {
       const response = await preferencesAPI.get();
       const apiPreferences = response.data.preferences || response.data;
-      // Merge with defaults to ensure all fields exist
-      set({ preferences: { ...DEFAULT_PREFERENCES, ...apiPreferences } });
+      const sounds = response.data.availableSounds || [];
+      set({
+        preferences: { ...DEFAULT_PREFERENCES, ...apiPreferences },
+        availableSounds: sounds,
+      });
     } catch (error) {
-      // Keep default preferences if API fails
       console.log('Preferences API fetch error (using defaults):', error.message);
     }
   },
 
+  fetchAvailableSounds: async () => {
+    try {
+      const response = await preferencesAPI.getSounds();
+      set({ availableSounds: response.data.sounds || [] });
+    } catch (error) {
+      console.error('Error fetching sounds:', error);
+    }
+  },
+
   updatePreferences: async (data) => {
-    // Update UI immediately - don't wait for API
     const currentPreferences = get().preferences || DEFAULT_PREFERENCES;
     const newPreferences = { ...currentPreferences, ...data };
     set({ preferences: newPreferences });
 
-    // Fire and forget - don't let API response override local state
-    preferencesAPI.update(data).catch((error) => {
+    try {
+      await preferencesAPI.update(data);
+      return { success: true };
+    } catch (error) {
       console.log('Preferences API error:', error.message);
-    });
-
-    return { success: true };
+      return { success: false, error: error.message };
+    }
   },
 
   clearError: () => set({ error: null }),
