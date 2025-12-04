@@ -212,6 +212,22 @@ const TasksScreen = ({ navigation }) => {
     const statusInfo = getTaskStatusInfo(item.estado);
     const priorityInfo = getTaskPriorityInfo(item.prioridad);
     const isCompleted = item.estado === 'completada';
+    const isInProgress = item.estado === 'en_progreso';
+    const isPending = item.estado === 'pendiente';
+
+    // Determine next status: pendiente -> en_progreso -> completada
+    const getNextStatus = () => {
+      if (isPending) return 'en_progreso';
+      if (isInProgress) return 'completada';
+      return null; // completed - no next status
+    };
+
+    const handleCheckboxPress = () => {
+      const nextStatus = getNextStatus();
+      if (nextStatus) {
+        handleStatusChange(item, nextStatus);
+      }
+    };
 
     return (
       <Card style={styles.taskCard}>
@@ -223,12 +239,16 @@ const TasksScreen = ({ navigation }) => {
             <TouchableOpacity
               style={[
                 styles.checkbox,
+                isInProgress && styles.checkboxInProgress,
                 isCompleted && styles.checkboxCompleted,
               ]}
-              onPress={() =>
-                handleStatusChange(item, isCompleted ? 'pendiente' : 'completada')
-              }
+              onPress={handleCheckboxPress}
+              disabled={isCompleted}
+              activeOpacity={isCompleted ? 1 : 0.7}
             >
+              {isInProgress && (
+                <Ionicons name="time" size={14} color={COLORS.white} />
+              )}
               {isCompleted && (
                 <Ionicons name="checkmark" size={16} color={COLORS.white} />
               )}
@@ -523,6 +543,10 @@ const styles = StyleSheet.create({
     marginRight: 12,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  checkboxInProgress: {
+    backgroundColor: COLORS.info,
+    borderColor: COLORS.info,
   },
   checkboxCompleted: {
     backgroundColor: COLORS.success,
