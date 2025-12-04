@@ -15,6 +15,7 @@ import { Card, Loading } from '../../components/common';
 import { COLORS, formatCurrency } from '../../constants';
 
 const screenWidth = Dimensions.get('window').width;
+const TAB_WIDTH = (screenWidth - 48) / 4; // 4 tabs with padding
 
 const ReportsScreen = ({ route }) => {
   const { accountId } = route.params;
@@ -29,18 +30,33 @@ const ReportsScreen = ({ route }) => {
       setIsLoading(true);
       const params = { periodo: period };
 
-      const [totals, expenses, income, trends] = await Promise.all([
-        reportsAPI.getTotals(accountId, params).catch(() => ({ data: {} })),
+      const [dashboard, expenses, income, trends] = await Promise.all([
+        reportsAPI.getDashboard(accountId).catch(() => ({ data: {} })),
         reportsAPI.getExpensesByCategory(accountId, params).catch(() => ({ data: [] })),
         reportsAPI.getIncomeByCategory(accountId, params).catch(() => ({ data: [] })),
         reportsAPI.getMonthlyTrends(accountId, params).catch(() => ({ data: [] })),
       ]);
 
+      // Parse dashboard data - it returns mesActual with ingresos, gastos, balance
+      const dashboardData = dashboard.data || {};
+      const mesActual = dashboardData.mesActual || {};
+
+      // Build totals from dashboard response
+      const totalsData = {
+        ingresos: mesActual.ingresos || 0,
+        gastos: mesActual.gastos || 0,
+        balance: mesActual.balance || (mesActual.ingresos - mesActual.gastos) || 0,
+      };
+
+      const expensesData = expenses.data?.categories || expenses.data?.data || expenses.data || [];
+      const incomeData = income.data?.categories || income.data?.data || income.data || [];
+      const trendsData = trends.data?.trends || trends.data?.data || trends.data || [];
+
       setData({
-        totals: totals.data,
-        expensesByCategory: expenses.data.categories || expenses.data || [],
-        incomeByCategory: income.data.categories || income.data || [],
-        monthlyTrends: trends.data.trends || trends.data || [],
+        totals: totalsData,
+        expensesByCategory: Array.isArray(expensesData) ? expensesData : [],
+        incomeByCategory: Array.isArray(incomeData) ? incomeData : [],
+        monthlyTrends: Array.isArray(trendsData) ? trendsData : [],
       });
     } catch (error) {
       console.error('Error loading report data:', error);
@@ -90,38 +106,45 @@ const ReportsScreen = ({ route }) => {
 
   return (
     <View style={styles.container}>
-      {/* Report Tabs */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.tabsContainer}
-        contentContainerStyle={styles.tabsContent}
-      >
-        {reportTabs.map((tab) => (
-          <TouchableOpacity
-            key={tab.key}
-            style={[
-              styles.tab,
-              activeReport === tab.key && styles.tabActive,
-            ]}
-            onPress={() => setActiveReport(tab.key)}
-          >
-            <Ionicons
-              name={tab.icon}
-              size={18}
-              color={activeReport === tab.key ? COLORS.white : COLORS.gray[600]}
-            />
-            <Text
-              style={[
-                styles.tabText,
-                activeReport === tab.key && styles.tabTextActive,
-              ]}
-            >
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {/* Report Tabs - Card Style */}
+      <View style={styles.tabsContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsContent}
+        >
+          {reportTabs.map((tab, index) => {
+            const isActive = activeReport === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={[
+                  styles.tabCard,
+                  isActive && styles.tabCardActive,
+                  index === 0 && styles.tabCardFirst,
+                ]}
+                onPress={() => setActiveReport(tab.key)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={tab.icon}
+                  size={22}
+                  color={isActive ? COLORS.white : COLORS.gray[400]}
+                />
+                <Text
+                  style={[
+                    styles.tabCardText,
+                    isActive && styles.tabCardTextActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       {/* Period Selector */}
       <View style={styles.periodContainer}>
@@ -410,53 +433,67 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray[200],
+    paddingVertical: 16,
+    paddingHorizontal: 12,
   },
   tabsContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  tab: {
     flexDirection: 'row',
+    gap: 10,
+  },
+  tabCard: {
+    width: TAB_WIDTH,
+    height: 80,
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: COLORS.gray[100],
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
     gap: 6,
-    marginRight: 8,
   },
-  tabActive: {
+  tabCardFirst: {
+    marginLeft: 4,
+  },
+  tabCardActive: {
     backgroundColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.3,
   },
-  tabText: {
-    fontSize: 14,
+  tabCardText: {
+    fontSize: 12,
     fontWeight: '500',
-    color: COLORS.gray[600],
+    color: COLORS.gray[500],
+    textAlign: 'center',
   },
-  tabTextActive: {
+  tabCardTextActive: {
     color: COLORS.white,
+    fontWeight: '600',
   },
   periodContainer: {
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    backgroundColor: COLORS.white,
     gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray[100],
   },
   periodButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    backgroundColor: COLORS.white,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: COLORS.gray[100],
   },
   periodButtonActive: {
     backgroundColor: COLORS.primary + '20',
   },
   periodText: {
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.gray[600],
+    fontWeight: '500',
   },
   periodTextActive: {
     color: COLORS.primary,
