@@ -566,7 +566,10 @@ export const useEventsStore = create((set, get) => ({
       } else {
         response = await eventsAPI.getAll(params);
       }
-      const eventsData = response.data.events || response.data;
+      // Handle different response formats:
+      // - getAll returns: { data: events, pagination: {...} }
+      // - getByAccount returns: events array directly
+      const eventsData = response.data.events || response.data.data || response.data;
       set({
         events: Array.isArray(eventsData) ? eventsData : [],
         pagination: response.data.pagination || get().pagination,

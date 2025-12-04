@@ -60,7 +60,19 @@ const CalendarScreen = ({ navigation }) => {
     isLoading,
   } = useEventsStore();
 
-  const { selectedAccount } = useAccountsStore();
+  const { selectedAccount, accounts } = useAccountsStore();
+
+  // Helper to get account name from event
+  const getAccountName = (event) => {
+    // Backend returns cuenta: { id, nombre } for getAll, or just id_cuenta for getByAccount
+    if (event.cuenta?.nombre) {
+      return event.cuenta.nombre;
+    }
+    const accountId = event.id_cuenta || event.idCuenta || event.accountId || event.cuenta?.id;
+    if (!accountId) return null;
+    const account = accounts.find(a => a.id === accountId || a.id === parseInt(accountId));
+    return account?.nombre || account?.name || null;
+  };
 
   // Ensure events and reminders are always arrays
   const events = Array.isArray(eventsData) ? eventsData : [];
@@ -117,17 +129,21 @@ const CalendarScreen = ({ navigation }) => {
     const start = new Date(year, month, 1).toISOString().split('T')[0];
     const end = new Date(year, month + 1, 0).toISOString().split('T')[0];
 
-    fetchEvents(selectedAccount?.id, { start, end });
-    if (selectedAccount?.id) {
-      fetchAllReminders(selectedAccount.id);
-    }
-  }, [fetchEvents, fetchAllReminders, selectedAccount]);
+    // Fetch ALL events (not filtered by account) for the admin calendar view
+    fetchEvents(null, { start, end });
+    fetchAllReminders();
+  }, [fetchEvents, fetchAllReminders]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([fetchEvents(), fetchAllReminders(selectedAccount?.id)]);
+    const currentDate = new Date();
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const start = new Date(year, month, 1).toISOString().split('T')[0];
+    const end = new Date(year, month + 1, 0).toISOString().split('T')[0];
+    await Promise.all([fetchEvents(null, { start, end }), fetchAllReminders()]);
     setRefreshing(false);
-  }, [fetchEvents, fetchAllReminders, selectedAccount]);
+  }, [fetchEvents, fetchAllReminders]);
 
   // Event Modal Functions
   const resetEventForm = () => {
@@ -218,9 +234,12 @@ const CalendarScreen = ({ navigation }) => {
 
       let result;
       if (selectedEvent) {
-        result = await updateEvent(selectedEvent.id, payload);
+        // Pass accountId for account-scoped update
+        const eventAccountId = selectedEvent.id_cuenta || selectedEvent.idCuenta || selectedAccount?.id;
+        result = await updateEvent(selectedEvent.id, payload, eventAccountId);
       } else {
-        result = await createEvent(payload);
+        // Pass accountId for account-scoped creation
+        result = await createEvent(payload, selectedAccount?.id);
       }
 
       if (result.success) {
@@ -230,6 +249,13 @@ const CalendarScreen = ({ navigation }) => {
         });
         setEventModalVisible(false);
         resetEventForm();
+        // Refresh all events
+        const currentDate = new Date();
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        const start = new Date(year, month, 1).toISOString().split('T')[0];
+        const end = new Date(year, month + 1, 0).toISOString().split('T')[0];
+        fetchEvents(null, { start, end });
       } else {
         Toast.show({
           type: 'error',
@@ -263,7 +289,7 @@ const CalendarScreen = ({ navigation }) => {
         });
         setReminderModalVisible(false);
         resetReminderForm();
-        fetchAllReminders(selectedAccount?.id);
+        fetchAllReminders();
       } else {
         Toast.show({
           type: 'error',
@@ -281,7 +307,9 @@ const CalendarScreen = ({ navigation }) => {
 
     setSaving(true);
     try {
-      const result = await deleteEvent(selectedEvent.id);
+      // Pass accountId for account-scoped deletion
+      const eventAccountId = selectedEvent.id_cuenta || selectedEvent.idCuenta || selectedAccount?.id;
+      const result = await deleteEvent(selectedEvent.id, eventAccountId);
       if (result.success) {
         Toast.show({
           type: 'success',
@@ -289,6 +317,13 @@ const CalendarScreen = ({ navigation }) => {
         });
         setDeleteDialogVisible(false);
         setSelectedEvent(null);
+        // Refresh all events
+        const currentDate = new Date();
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        const start = new Date(year, month, 1).toISOString().split('T')[0];
+        const end = new Date(year, month + 1, 0).toISOString().split('T')[0];
+        fetchEvents(null, { start, end });
       } else {
         Toast.show({
           type: 'error',
@@ -371,6 +406,12 @@ const CalendarScreen = ({ navigation }) => {
     return eventDate && eventDate.split('T')[0] === selectedDate;
   });
 
+  // Filter reminders for selected date
+  const selectedDateReminders = reminders.filter((reminder) => {
+    const reminderDate = reminder.fecha_recordatorio || reminder.fechaRecordatorio;
+    return reminderDate && reminderDate.split('T')[0] === selectedDate;
+  });
+
   // Upcoming events (next 5)
   const upcomingEvents = events
     .filter((event) => {
@@ -404,15 +445,13 @@ const CalendarScreen = ({ navigation }) => {
       >
         {/* Header with Add Buttons */}
         <View style={styles.headerButtons}>
-          {selectedAccount && (
-            <TouchableOpacity
-              style={styles.headerButton}
-              onPress={openReminderModal}
-            >
-              <Ionicons name="alarm-outline" size={18} color={COLORS.primary} />
-              <Text style={styles.headerButtonText}>Recordatorio</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={openReminderModal}
+          >
+            <Ionicons name="alarm-outline" size={18} color={COLORS.primary} />
+            <Text style={styles.headerButtonText}>Recordatorio</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.headerButton, styles.headerButtonPrimary]}
             onPress={() => openEventModal()}
@@ -459,6 +498,7 @@ const CalendarScreen = ({ navigation }) => {
             upcomingEvents.map((event) => {
               const eventType = getEventTypeInfo(event.tipo);
               const eventDate = event.fecha || event.fechaHoraInicio || event.fecha_hora_inicio;
+              const accountName = getAccountName(event);
               return (
                 <Card key={event.id} style={styles.eventCard}>
                   <TouchableOpacity
@@ -483,6 +523,12 @@ const CalendarScreen = ({ navigation }) => {
                         <Text style={styles.eventDate}>
                           {formatDate(eventDate, 'long')}
                         </Text>
+                        {accountName && (
+                          <View style={styles.accountTag}>
+                            <Ionicons name="wallet-outline" size={12} color={COLORS.gray[500]} />
+                            <Text style={styles.accountTagText}>{accountName}</Text>
+                          </View>
+                        )}
                         {event.monto && (
                           <Text style={styles.eventAmount}>
                             {formatCurrency(event.monto, selectedAccount?.moneda)}
@@ -526,14 +572,15 @@ const CalendarScreen = ({ navigation }) => {
         </View>
 
         {/* Reminders Section */}
-        {selectedAccount && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="alarm" size={20} color={COLORS.warning} />
-              <Text style={styles.sectionTitle}>Recordatorios</Text>
-            </View>
-            {activeReminders.length > 0 ? (
-              activeReminders.map((reminder) => (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="alarm" size={20} color={COLORS.warning} />
+            <Text style={styles.sectionTitle}>Recordatorios</Text>
+          </View>
+          {activeReminders.length > 0 ? (
+            activeReminders.map((reminder) => {
+              const accountName = getAccountName(reminder);
+              return (
                 <Card
                   key={reminder.id}
                   style={[styles.eventCard, styles.reminderCard]}
@@ -546,11 +593,17 @@ const CalendarScreen = ({ navigation }) => {
                       <Text style={styles.eventTitle}>
                         {reminder.mensaje || reminder.titulo}
                       </Text>
-                      {reminder.fecha_recordatorio && (
+                      {(reminder.fecha_recordatorio || reminder.fechaRecordatorio) && (
                         <Text style={styles.eventDate}>
-                          {formatDate(reminder.fecha_recordatorio, 'long')} -{' '}
-                          {formatDate(reminder.fecha_recordatorio, 'time')}
+                          {formatDate(reminder.fecha_recordatorio || reminder.fechaRecordatorio, 'long')} -{' '}
+                          {formatDate(reminder.fecha_recordatorio || reminder.fechaRecordatorio, 'time')}
                         </Text>
+                      )}
+                      {accountName && (
+                        <View style={styles.accountTag}>
+                          <Ionicons name="wallet-outline" size={12} color={COLORS.gray[500]} />
+                          <Text style={styles.accountTagText}>{accountName}</Text>
+                        </View>
                       )}
                     </View>
                     <TouchableOpacity
@@ -565,14 +618,14 @@ const CalendarScreen = ({ navigation }) => {
                     </TouchableOpacity>
                   </View>
                 </Card>
-              ))
-            ) : (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No hay recordatorios activos</Text>
-              </View>
-            )}
-          </View>
-        )}
+              );
+            })
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No hay recordatorios activos</Text>
+            </View>
+          )}
+        </View>
       </ScrollView>
 
       {/* View Events Modal (when clicking on a date) */}
@@ -582,49 +635,112 @@ const CalendarScreen = ({ navigation }) => {
         title={formatDate(selectedDate, 'long')}
       >
         <ScrollView style={styles.modalScrollView}>
-          {selectedDateEvents.length > 0 ? (
-            selectedDateEvents.map((event) => {
-              const eventType = getEventTypeInfo(event.tipo);
-              return (
-                <Card key={event.id} style={styles.modalEventCard}>
-                  <View style={styles.eventHeader}>
-                    <View
-                      style={[
-                        styles.eventTypeIcon,
-                        { backgroundColor: eventType.color + '20' },
-                      ]}
-                    >
-                      <Ionicons
-                        name={eventType.icon}
-                        size={18}
-                        color={eventType.color}
-                      />
-                    </View>
-                    <View style={styles.eventInfo}>
-                      <Text style={styles.eventTitle}>{event.titulo}</Text>
-                      <Text style={styles.eventTypeLabel}>{eventType.label}</Text>
-                      {event.monto && (
-                        <Text style={styles.eventAmount}>
-                          {formatCurrency(event.monto, selectedAccount?.moneda)}
-                        </Text>
-                      )}
-                    </View>
-                    <View style={styles.eventActions}>
-                      <TouchableOpacity
-                        style={styles.actionBtn}
-                        onPress={() => openEventModal(event)}
+          {/* Events Section */}
+          {selectedDateEvents.length > 0 && (
+            <View style={styles.modalSection}>
+              <View style={styles.modalSectionHeader}>
+                <Ionicons name="calendar" size={16} color={COLORS.primary} />
+                <Text style={styles.modalSectionTitle}>Eventos</Text>
+              </View>
+              {selectedDateEvents.map((event) => {
+                const eventType = getEventTypeInfo(event.tipo);
+                const accountName = getAccountName(event);
+                return (
+                  <Card key={event.id} style={styles.modalEventCard}>
+                    <View style={styles.eventHeader}>
+                      <View
+                        style={[
+                          styles.eventTypeIcon,
+                          { backgroundColor: eventType.color + '20' },
+                        ]}
                       >
                         <Ionicons
-                          name="create-outline"
+                          name={eventType.icon}
                           size={18}
-                          color={COLORS.gray[600]}
+                          color={eventType.color}
                         />
-                      </TouchableOpacity>
+                      </View>
+                      <View style={styles.eventInfo}>
+                        <Text style={styles.eventTitle}>{event.titulo}</Text>
+                        <Text style={styles.eventTypeLabel}>{eventType.label}</Text>
+                        {accountName && (
+                          <View style={styles.accountTag}>
+                            <Ionicons name="wallet-outline" size={12} color={COLORS.gray[500]} />
+                            <Text style={styles.accountTagText}>{accountName}</Text>
+                          </View>
+                        )}
+                        {event.monto && (
+                          <Text style={styles.eventAmount}>
+                            {formatCurrency(event.monto, selectedAccount?.moneda)}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={styles.eventActions}>
+                        <TouchableOpacity
+                          style={styles.actionBtn}
+                          onPress={() => openEventModal(event)}
+                        >
+                          <Ionicons
+                            name="create-outline"
+                            size={18}
+                            color={COLORS.gray[600]}
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.actionBtn}
+                          onPress={() => {
+                            setViewEventsModalVisible(false);
+                            openDeleteEventDialog(event);
+                          }}
+                        >
+                          <Ionicons
+                            name="trash-outline"
+                            size={18}
+                            color={COLORS.danger}
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </Card>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Reminders Section */}
+          {selectedDateReminders.length > 0 && (
+            <View style={styles.modalSection}>
+              <View style={styles.modalSectionHeader}>
+                <Ionicons name="alarm" size={16} color={COLORS.warning} />
+                <Text style={styles.modalSectionTitle}>Recordatorios</Text>
+              </View>
+              {selectedDateReminders.map((reminder) => {
+                const accountName = getAccountName(reminder);
+                return (
+                  <Card key={reminder.id} style={[styles.modalEventCard, styles.modalReminderCard]}>
+                    <View style={styles.eventHeader}>
+                      <View style={styles.reminderIconContainer}>
+                        <Ionicons name="alarm" size={18} color={COLORS.warning} />
+                      </View>
+                      <View style={styles.eventInfo}>
+                        <Text style={styles.eventTitle}>
+                          {reminder.mensaje || reminder.titulo}
+                        </Text>
+                        <Text style={styles.eventDate}>
+                          {formatDate(reminder.fecha_recordatorio || reminder.fechaRecordatorio, 'time')}
+                        </Text>
+                        {accountName && (
+                          <View style={styles.accountTag}>
+                            <Ionicons name="wallet-outline" size={12} color={COLORS.gray[500]} />
+                            <Text style={styles.accountTagText}>{accountName}</Text>
+                          </View>
+                        )}
+                      </View>
                       <TouchableOpacity
                         style={styles.actionBtn}
                         onPress={() => {
                           setViewEventsModalVisible(false);
-                          openDeleteEventDialog(event);
+                          openDeleteReminderDialog(reminder);
                         }}
                       >
                         <Ionicons
@@ -634,29 +750,52 @@ const CalendarScreen = ({ navigation }) => {
                         />
                       </TouchableOpacity>
                     </View>
-                  </View>
-                </Card>
-              );
-            })
-          ) : (
+                  </Card>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Empty State */}
+          {selectedDateEvents.length === 0 && selectedDateReminders.length === 0 && (
             <View style={styles.emptyStateModal}>
               <Ionicons name="calendar-outline" size={48} color={COLORS.gray[300]} />
-              <Text style={styles.emptyText}>No hay eventos para este dia</Text>
+              <Text style={styles.emptyText}>No hay eventos ni recordatorios</Text>
             </View>
           )}
         </ScrollView>
-        <View style={styles.modalFooter}>
+        <View style={styles.modalFooterColumn}>
+          <View style={styles.modalFooter}>
+            <Button
+              title="Agregar Evento"
+              onPress={() => openEventModal()}
+              style={styles.modalButton}
+              icon={<Ionicons name="calendar-outline" size={18} color={COLORS.white} />}
+            />
+            <Button
+              title="Recordatorio"
+              variant="outline"
+              onPress={() => {
+                setViewEventsModalVisible(false);
+                // Set reminder date to selected date
+                const dateObj = new Date(selectedDate + 'T09:00:00');
+                setReminderFormData({
+                  mensaje: '',
+                  fecha: dateObj,
+                  minutos_antes: '15',
+                  notification_sound: 'default',
+                });
+                setReminderModalVisible(true);
+              }}
+              style={styles.modalButton}
+              icon={<Ionicons name="alarm-outline" size={18} color={COLORS.primary} />}
+            />
+          </View>
           <Button
             title="Cerrar"
             variant="outline"
             onPress={() => setViewEventsModalVisible(false)}
-            style={styles.modalButton}
-          />
-          <Button
-            title="Agregar Evento"
-            onPress={() => openEventModal()}
-            style={styles.modalButton}
-            icon={<Ionicons name="add" size={18} color={COLORS.white} />}
+            style={styles.closeButton}
           />
         </View>
       </Modal>
@@ -1141,6 +1280,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.gray[500],
   },
+  accountTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  accountTagText: {
+    fontSize: 12,
+    color: COLORS.gray[500],
+  },
   deleteBtn: {
     padding: 6,
   },
@@ -1172,10 +1321,34 @@ const styles = StyleSheet.create({
     padding: 14,
     backgroundColor: COLORS.gray[50],
   },
+  modalReminderCard: {
+    backgroundColor: COLORS.warning + '08',
+    borderWidth: 1,
+    borderColor: COLORS.warning + '30',
+  },
+  modalSection: {
+    marginBottom: 16,
+  },
+  modalSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  modalSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.gray[700],
+  },
+  modalFooterColumn: {
+    marginTop: 16,
+  },
   modalFooter: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 16,
+  },
+  closeButton: {
+    marginTop: 10,
   },
   modalButton: {
     flex: 1,

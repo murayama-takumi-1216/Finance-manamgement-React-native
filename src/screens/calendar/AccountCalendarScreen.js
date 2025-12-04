@@ -47,10 +47,9 @@ const AccountCalendarScreen = ({ route }) => {
   const [formData, setFormData] = useState({
     titulo: '',
     descripcion: '',
-    fecha_inicio: '',
-    fecha_fin: '',
-    ubicacion: '',
+    tipo: 'pago_unico',
   });
+  const [eventDate, setEventDate] = useState(new Date());
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
@@ -64,13 +63,13 @@ const AccountCalendarScreen = ({ route }) => {
   }, [fetchEvents, accountId]);
 
   const resetForm = () => {
+    const dateObj = new Date(selectedDate + 'T09:00:00');
     setFormData({
       titulo: '',
       descripcion: '',
-      fecha_inicio: selectedDate + 'T09:00:00',
-      fecha_fin: selectedDate + 'T10:00:00',
-      ubicacion: '',
+      tipo: 'pago_unico',
     });
+    setEventDate(dateObj);
     setErrors({});
     setSelectedEvent(null);
   };
@@ -82,13 +81,13 @@ const AccountCalendarScreen = ({ route }) => {
 
   const openEditModal = (event) => {
     setSelectedEvent(event);
+    const eventDateTime = event.fecha_hora_inicio || event.fechaHoraInicio || event.fecha_inicio || event.fecha;
     setFormData({
       titulo: event.titulo,
       descripcion: event.descripcion || '',
-      fecha_inicio: event.fecha_inicio,
-      fecha_fin: event.fecha_fin || event.fecha_inicio,
-      ubicacion: event.ubicacion || '',
+      tipo: event.tipo || 'pago_unico',
     });
+    setEventDate(eventDateTime ? new Date(eventDateTime) : new Date());
     setModalVisible(true);
   };
 
@@ -111,11 +110,19 @@ const AccountCalendarScreen = ({ route }) => {
 
     setSaving(true);
     try {
+      const payload = {
+        titulo: formData.titulo,
+        descripcion: formData.descripcion || null,
+        fecha_hora_inicio: eventDate.toISOString(),
+        tipo: formData.tipo || 'pago_unico',
+        id_cuenta: accountId,
+      };
+
       let result;
       if (selectedEvent) {
-        result = await updateEvent(selectedEvent.id, formData, accountId);
+        result = await updateEvent(selectedEvent.id, payload, accountId);
       } else {
-        result = await createEvent(formData, accountId);
+        result = await createEvent(payload, accountId);
       }
 
       if (result.success) {
@@ -125,6 +132,8 @@ const AccountCalendarScreen = ({ route }) => {
         });
         setModalVisible(false);
         resetForm();
+        // Refresh events
+        fetchEvents(accountId);
       } else {
         Toast.show({
           type: 'error',
@@ -162,9 +171,14 @@ const AccountCalendarScreen = ({ route }) => {
     }
   };
 
+  const getEventDate = (event) => {
+    return event.fecha_hora_inicio || event.fechaHoraInicio || event.fecha_inicio || event.fecha;
+  };
+
   const markedDates = events.reduce((acc, event) => {
-    if (!event.fecha_inicio) return acc;
-    const date = event.fecha_inicio.split('T')[0];
+    const eventDate = getEventDate(event);
+    if (!eventDate) return acc;
+    const date = eventDate.split('T')[0];
     acc[date] = {
       marked: true,
       dotColor: COLORS.primary,
@@ -183,9 +197,10 @@ const AccountCalendarScreen = ({ route }) => {
     markedDates[selectedDate].selected = true;
   }
 
-  const selectedDateEvents = events.filter(
-    (event) => event.fecha_inicio && event.fecha_inicio.split('T')[0] === selectedDate
-  );
+  const selectedDateEvents = events.filter((event) => {
+    const eventDate = getEventDate(event);
+    return eventDate && eventDate.split('T')[0] === selectedDate;
+  });
 
   if (isLoading && events.length === 0) {
     return <Loading text="Cargando calendario..." />;
@@ -225,23 +240,29 @@ const AccountCalendarScreen = ({ route }) => {
           </View>
 
           {selectedDateEvents.length > 0 ? (
-            selectedDateEvents.map((event) => (
-              <Card key={event.id} style={styles.eventCard}>
-                <TouchableOpacity onPress={() => openEditModal(event)}>
-                  <View style={styles.eventHeader}>
-                    <View style={styles.eventInfo}>
-                      <Text style={styles.eventTime}>
-                        {formatDate(event.fecha_inicio, 'time')}
-                      </Text>
-                      <Text style={styles.eventTitle}>{event.titulo}</Text>
+            selectedDateEvents.map((event) => {
+              const eventDateTime = getEventDate(event);
+              return (
+                <Card key={event.id} style={styles.eventCard}>
+                  <TouchableOpacity onPress={() => openEditModal(event)}>
+                    <View style={styles.eventHeader}>
+                      <View style={styles.eventInfo}>
+                        <Text style={styles.eventTime}>
+                          {formatDate(eventDateTime, 'time')}
+                        </Text>
+                        <Text style={styles.eventTitle}>{event.titulo}</Text>
+                        {event.tipo && (
+                          <Text style={styles.eventType}>{event.tipo}</Text>
+                        )}
+                      </View>
+                      <TouchableOpacity onPress={() => openDeleteDialog(event)}>
+                        <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
+                      </TouchableOpacity>
                     </View>
-                    <TouchableOpacity onPress={() => openDeleteDialog(event)}>
-                      <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
-                    </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
-              </Card>
-            ))
+                  </TouchableOpacity>
+                </Card>
+              );
+            })
           ) : (
             <View style={styles.noEvents}>
               <Text style={styles.noEventsText}>No hay eventos</Text>
@@ -296,7 +317,8 @@ const styles = StyleSheet.create({
   eventHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   eventInfo: { flex: 1 },
   eventTime: { fontSize: 12, color: COLORS.primary, fontWeight: '600' },
-  eventTitle: { fontSize: 16, fontWeight: '500', color: COLORS.gray[900] },
+  eventTitle: { fontSize: 16, fontWeight: '500', color: COLORS.gray[900], marginTop: 2 },
+  eventType: { fontSize: 12, color: COLORS.gray[500], marginTop: 2 },
   noEvents: { alignItems: 'center', paddingVertical: 40 },
   noEventsText: { fontSize: 14, color: COLORS.gray[500] },
   modalButtons: { flexDirection: 'row', gap: 12, marginTop: 8 },
