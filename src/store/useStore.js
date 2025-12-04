@@ -444,8 +444,10 @@ export const useTasksStore = create((set, get) => ({
         set({ currentAccountId: null });
       }
 
+      // API returns { data: tasks, pagination: {...} }
+      const tasksArray = response.data.data || response.data.tasks || response.data;
       set({
-        tasks: response.data.tasks || response.data,
+        tasks: Array.isArray(tasksArray) ? tasksArray : [],
         pagination: response.data.pagination || get().pagination,
         isLoading: false,
       });
@@ -680,10 +682,15 @@ export const useEventsStore = create((set, get) => ({
 
   fetchAllReminders: async () => {
     try {
+      console.log('[Store] Fetching all reminders from /reminders...');
       const response = await remindersAPI.getAllUserReminders();
-      set({ reminders: response.data.reminders || response.data });
+      console.log('[Store] Reminders API response:', JSON.stringify(response.data, null, 2));
+      const remindersList = response.data.reminders || response.data;
+      console.log('[Store] Setting reminders:', Array.isArray(remindersList) ? remindersList.length : 'not array');
+      set({ reminders: Array.isArray(remindersList) ? remindersList : [] });
     } catch (error) {
-      console.error('Error fetching all reminders:', error);
+      console.error('[Store] Error fetching all reminders:', error.message);
+      console.error('[Store] Error details:', error.response?.data || error);
     }
   },
 

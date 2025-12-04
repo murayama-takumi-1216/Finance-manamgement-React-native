@@ -53,8 +53,8 @@ const TasksScreen = ({ navigation }) => {
   const [formData, setFormData] = useState({
     titulo: '',
     descripcion: '',
-    estado: 'todo',
-    prioridad: 'medium',
+    estado: 'pendiente',
+    prioridad: 'media',
     fecha_vencimiento: '',
   });
   const [errors, setErrors] = useState({});
@@ -78,8 +78,8 @@ const TasksScreen = ({ navigation }) => {
     setFormData({
       titulo: '',
       descripcion: '',
-      estado: 'todo',
-      prioridad: 'medium',
+      estado: 'pendiente',
+      prioridad: 'media',
       fecha_vencimiento: '',
     });
     setErrors({});
@@ -93,14 +93,14 @@ const TasksScreen = ({ navigation }) => {
 
   const openEditModal = (task) => {
     setSelectedTask(task);
+    // Backend returns fechaFin for due date
+    const dueDate = task.fecha_vencimiento || task.fechaFin || task.fecha_fin;
     setFormData({
       titulo: task.titulo,
       descripcion: task.descripcion || '',
       estado: task.estado,
-      prioridad: task.prioridad || 'medium',
-      fecha_vencimiento: task.fecha_vencimiento
-        ? task.fecha_vencimiento.split('T')[0]
-        : '',
+      prioridad: task.prioridad || 'media',
+      fecha_vencimiento: dueDate ? dueDate.split('T')[0] : '',
     });
     setModalVisible(true);
   };
@@ -188,9 +188,9 @@ const TasksScreen = ({ navigation }) => {
 
   const getStatusBadgeVariant = (status) => {
     switch (status) {
-      case 'done':
+      case 'completada':
         return 'success';
-      case 'in_progress':
+      case 'en_progreso':
         return 'info';
       default:
         return 'default';
@@ -199,9 +199,9 @@ const TasksScreen = ({ navigation }) => {
 
   const getPriorityBadgeVariant = (priority) => {
     switch (priority) {
-      case 'high':
+      case 'alta':
         return 'danger';
-      case 'medium':
+      case 'media':
         return 'warning';
       default:
         return 'default';
@@ -211,7 +211,7 @@ const TasksScreen = ({ navigation }) => {
   const renderTaskItem = ({ item }) => {
     const statusInfo = getTaskStatusInfo(item.estado);
     const priorityInfo = getTaskPriorityInfo(item.prioridad);
-    const isCompleted = item.estado === 'done';
+    const isCompleted = item.estado === 'completada';
 
     return (
       <Card style={styles.taskCard}>
@@ -226,7 +226,7 @@ const TasksScreen = ({ navigation }) => {
                 isCompleted && styles.checkboxCompleted,
               ]}
               onPress={() =>
-                handleStatusChange(item, isCompleted ? 'todo' : 'done')
+                handleStatusChange(item, isCompleted ? 'pendiente' : 'completada')
               }
             >
               {isCompleted && (
@@ -264,11 +264,11 @@ const TasksScreen = ({ navigation }) => {
                 size="small"
               />
             </View>
-            {item.fecha_vencimiento && (
+            {(item.fechaFin || item.fecha_fin || item.fecha_vencimiento) && (
               <Text style={styles.dueDate}>
                 <Ionicons name="calendar-outline" size={12} color={COLORS.gray[500]} />
                 {' '}
-                {formatDate(item.fecha_vencimiento)}
+                {formatDate(item.fechaFin || item.fecha_fin || item.fecha_vencimiento)}
               </Text>
             )}
           </View>
@@ -314,9 +314,9 @@ const TasksScreen = ({ navigation }) => {
       <View style={styles.filterContainer}>
         {[
           { key: 'all', label: 'Todas' },
-          { key: 'todo', label: 'Por hacer' },
-          { key: 'in_progress', label: 'En progreso' },
-          { key: 'done', label: 'Completadas' },
+          { key: 'pendiente', label: 'Por hacer' },
+          { key: 'en_progreso', label: 'En progreso' },
+          { key: 'completada', label: 'Completadas' },
         ].map((f) => (
           <TouchableOpacity
             key={f.key}
@@ -340,7 +340,7 @@ const TasksScreen = ({ navigation }) => {
 
       <FlatList
         data={tasks}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         renderItem={renderTaskItem}
         contentContainerStyle={styles.listContent}
         refreshControl={

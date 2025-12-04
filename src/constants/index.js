@@ -29,18 +29,19 @@ export const MOVEMENT_STATUS = [
   { value: 'confirmado', label: 'Confirmado', color: '#10b981' },
 ];
 
-// Task Status
+// Task Status (must match DB enum: 'pendiente', 'en_progreso', 'completada', 'cancelada')
 export const TASK_STATUS = [
-  { value: 'todo', label: 'Por hacer', color: '#6b7280' },
-  { value: 'in_progress', label: 'En progreso', color: '#3b82f6' },
-  { value: 'done', label: 'Completada', color: '#10b981' },
+  { value: 'pendiente', label: 'Por hacer', color: '#6b7280' },
+  { value: 'en_progreso', label: 'En progreso', color: '#3b82f6' },
+  { value: 'completada', label: 'Completada', color: '#10b981' },
+  { value: 'cancelada', label: 'Cancelada', color: '#ef4444' },
 ];
 
-// Task Priority
+// Task Priority (must match DB enum: 'baja', 'media', 'alta')
 export const TASK_PRIORITY = [
-  { value: 'low', label: 'Baja', color: '#6b7280' },
-  { value: 'medium', label: 'Media', color: '#f59e0b' },
-  { value: 'high', label: 'Alta', color: '#ef4444' },
+  { value: 'baja', label: 'Baja', color: '#6b7280' },
+  { value: 'media', label: 'Media', color: '#f59e0b' },
+  { value: 'alta', label: 'Alta', color: '#ef4444' },
 ];
 
 // Colors

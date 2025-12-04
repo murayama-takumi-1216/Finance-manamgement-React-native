@@ -25,27 +25,74 @@ const ReportsScreen = ({ route }) => {
   const [data, setData] = useState({});
   const [period, setPeriod] = useState('month');
 
+  // Calculate date range based on period
+  const getDateRange = useCallback(() => {
+    const now = new Date();
+    let startDate, endDate;
+
+    switch (period) {
+      case 'week':
+        // Start of current week (Monday)
+        const dayOfWeek = now.getDay();
+        const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        startDate = new Date(now);
+        startDate.setDate(now.getDate() - diffToMonday);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(now);
+        break;
+      case 'month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        endDate = new Date(now);
+        break;
+      case 'quarter':
+        const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
+        startDate = new Date(now.getFullYear(), quarterMonth, 1);
+        endDate = new Date(now);
+        break;
+      case 'year':
+        startDate = new Date(now.getFullYear(), 0, 1);
+        endDate = new Date(now);
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        endDate = new Date(now);
+    }
+
+    return {
+      fechaDesde: startDate.toISOString().split('T')[0],
+      fechaHasta: endDate.toISOString().split('T')[0],
+    };
+  }, [period]);
+
   const loadReportData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const params = { periodo: period };
 
-      const [dashboard, expenses, income, trends] = await Promise.all([
-        reportsAPI.getDashboard(accountId).catch(() => ({ data: {} })),
+      // Get date range for the selected period
+      const dateRange = getDateRange();
+      const params = { ...dateRange };
+
+      // Map period to agrupacion for the API
+      const agrupacionMap = {
+        week: 'semana',
+        month: 'mes',
+        quarter: 'trimestre',
+        year: 'mes', // Group by month for year view
+      };
+
+      const [totalsResponse, expenses, income, trends] = await Promise.all([
+        reportsAPI.getIncomeVsExpenses(accountId, { ...params, agrupacion: agrupacionMap[period] }).catch(() => ({ data: {} })),
         reportsAPI.getExpensesByCategory(accountId, params).catch(() => ({ data: [] })),
         reportsAPI.getIncomeByCategory(accountId, params).catch(() => ({ data: [] })),
         reportsAPI.getMonthlyTrends(accountId, params).catch(() => ({ data: [] })),
       ]);
 
-      // Parse dashboard data - it returns mesActual with ingresos, gastos, balance
-      const dashboardData = dashboard.data || {};
-      const mesActual = dashboardData.mesActual || {};
-
-      // Build totals from dashboard response
+      // Parse totals from getIncomeVsExpenses - returns { totales: { ingresos, gastos, balance }, series: [...] }
+      const totales = totalsResponse.data?.totales || {};
       const totalsData = {
-        ingresos: mesActual.ingresos || 0,
-        gastos: mesActual.gastos || 0,
-        balance: mesActual.balance || (mesActual.ingresos - mesActual.gastos) || 0,
+        ingresos: totales.ingresos || 0,
+        gastos: totales.gastos || 0,
+        balance: totales.balance || 0,
       };
 
       const expensesData = expenses.data?.categories || expenses.data?.data || expenses.data || [];
@@ -63,7 +110,7 @@ const ReportsScreen = ({ route }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [accountId, period]);
+  }, [accountId, period, getDateRange]);
 
   useEffect(() => {
     loadReportData();
