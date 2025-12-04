@@ -400,10 +400,11 @@ const CalendarScreen = ({ navigation }) => {
     markedDates[selectedDate].selectedColor = COLORS.primary;
   }
 
-  // Filter events for selected date
+  // Filter events for selected date (exclude recordatorio_generico type - those go to reminders)
   const selectedDateEvents = events.filter((event) => {
     const eventDate = event.fecha || event.fechaHoraInicio || event.fecha_hora_inicio;
-    return eventDate && eventDate.split('T')[0] === selectedDate;
+    const isReminderType = event.tipo === 'recordatorio_generico';
+    return eventDate && eventDate.split('T')[0] === selectedDate && !isReminderType;
   });
 
   // Filter reminders for selected date
@@ -412,11 +413,12 @@ const CalendarScreen = ({ navigation }) => {
     return reminderDate && reminderDate.split('T')[0] === selectedDate;
   });
 
-  // Upcoming events (next 5)
+  // Upcoming events (next 5) - exclude recordatorio_generico type
   const upcomingEvents = events
     .filter((event) => {
       const eventDate = event.fecha || event.fechaHoraInicio || event.fecha_hora_inicio;
-      return eventDate && new Date(eventDate) >= new Date();
+      const isReminderType = event.tipo === 'recordatorio_generico';
+      return eventDate && new Date(eventDate) >= new Date() && !isReminderType;
     })
     .sort((a, b) => {
       const aDate = a.fecha || a.fechaHoraInicio || a.fecha_hora_inicio;
