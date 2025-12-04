@@ -28,7 +28,17 @@
       "Bash(copy \"E:\\workana\\juan project\\finance project(mobile)\\node_modules\\@react-native-community\\cli-debugger-ui\\build\\ui\\assets\\priority.wav\" \"E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\gentle.wav\")",
       "Bash(xcopy:*)",
       "Bash(powershell -Command:*)",
-      "Bash(timeout /t 15)"
+      "Bash(timeout /t 15)",
+      "Bash(del \"E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\default.wav\")",
+      "Bash(move:*)",
+      "Bash(del \"E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\chime.wav\")",
+      "Bash(del \"E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\bell.wav\")",
+      "Bash(del \"E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\ping.wav\")",
+      "Bash(del \"E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\pop.wav\")",
+      "Bash(del \"E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\ding.wav\")",
+      "Bash(del \"E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\alert.wav\")",
+      "Bash(del \"E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\gentle.wav\")",
+      "Bash(powershell \"ls ''E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\'' | ft Name, Length\")"
     ],
     "deny": [],
     "ask": []
