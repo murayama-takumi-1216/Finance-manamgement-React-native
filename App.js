@@ -11,6 +11,8 @@ import { Ionicons } from '@expo/vector-icons';
 import RootNavigator from './src/navigation/RootNavigator';
 import { useAuthStore } from './src/store/useStore';
 import ErrorBoundary from './src/components/ErrorBoundary';
+import { AlarmModal } from './src/components/common';
+import useReminderAlarm from './src/hooks/useReminderAlarm';
 
 // Ignore specific warnings
 LogBox.ignoreLogs([
@@ -24,6 +26,7 @@ SplashScreen.preventAutoHideAsync();
 
 export default function App() {
   const { initializeAuth, isInitialized } = useAuthStore();
+  const { activeAlarm, dismissAlarm, snoozeAlarm } = useReminderAlarm();
 
   const [fontsLoaded] = useFonts({
     ...Ionicons.font,
@@ -65,6 +68,12 @@ export default function App() {
             <StatusBar style="auto" />
             <RootNavigator />
             <Toast />
+            <AlarmModal
+              visible={!!activeAlarm}
+              onDismiss={dismissAlarm}
+              onSnooze={snoozeAlarm}
+              reminder={activeAlarm}
+            />
           </NavigationContainer>
         </SafeAreaProvider>
       </GestureHandlerRootView>

@@ -290,28 +290,32 @@ const DashboardScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
         {upcomingEvents && upcomingEvents.length > 0 ? (
-          upcomingEvents.slice(0, 3).map((event) => (
-            <View key={event.id} style={styles.eventItem}>
-              <View style={styles.eventDate}>
-                <Text style={styles.eventDay}>
-                  {new Date(event.fecha_inicio).getDate()}
-                </Text>
-                <Text style={styles.eventMonth}>
-                  {new Date(event.fecha_inicio).toLocaleDateString('es-ES', {
-                    month: 'short',
-                  })}
-                </Text>
+          upcomingEvents.slice(0, 3).map((event) => {
+            // Handle different date field names from backend
+            const eventDate = event.fecha_hora_inicio || event.fechaHoraInicio || event.fecha_inicio || event.fecha;
+            const dateObj = eventDate ? new Date(eventDate) : null;
+
+            return (
+              <View key={event.id} style={styles.eventItem}>
+                <View style={styles.eventDate}>
+                  <Text style={styles.eventDay}>
+                    {dateObj ? dateObj.getDate() : '-'}
+                  </Text>
+                  <Text style={styles.eventMonth}>
+                    {dateObj ? dateObj.toLocaleDateString('es-ES', { month: 'short' }) : '-'}
+                  </Text>
+                </View>
+                <View style={styles.eventInfo}>
+                  <Text style={styles.eventTitle} numberOfLines={1}>
+                    {event.titulo}
+                  </Text>
+                  <Text style={styles.eventTime}>
+                    {dateObj ? formatDate(eventDate, 'time') : '-'}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.eventInfo}>
-                <Text style={styles.eventTitle} numberOfLines={1}>
-                  {event.titulo}
-                </Text>
-                <Text style={styles.eventTime}>
-                  {formatDate(event.fecha_inicio, 'time')}
-                </Text>
-              </View>
-            </View>
-          ))
+            );
+          })
         ) : (
           <Text style={styles.noEventsText}>No hay eventos próximos</Text>
         )}
