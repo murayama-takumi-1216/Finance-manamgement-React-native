@@ -161,7 +161,7 @@ const DashboardScreen = ({ navigation }) => {
 
       {isLoading ? (
         <Loading text="Cargando datos..." />
-      ) : dashboardData ? (
+      ) : (
         <>
           {/* Summary Cards */}
           <View style={styles.summaryContainer}>
@@ -172,7 +172,7 @@ const DashboardScreen = ({ navigation }) => {
               <Text style={styles.summaryLabel}>Ingresos</Text>
               <Text style={styles.summaryValue}>
                 {formatCurrency(
-                  dashboardData.totals?.ingresos || 0,
+                  dashboardData.totals?.ingresos || selectedAccount?.balance?.totalIngresos || 0,
                   selectedAccount?.moneda
                 )}
               </Text>
@@ -185,7 +185,7 @@ const DashboardScreen = ({ navigation }) => {
               <Text style={styles.summaryLabel}>Gastos</Text>
               <Text style={styles.summaryValue}>
                 {formatCurrency(
-                  dashboardData.totals?.gastos || 0,
+                  dashboardData.totals?.gastos || selectedAccount?.balance?.totalGastos || 0,
                   selectedAccount?.moneda
                 )}
               </Text>
@@ -200,21 +200,21 @@ const DashboardScreen = ({ navigation }) => {
                 styles.balanceValue,
                 {
                   color:
-                    (dashboardData.totals?.balance || 0) >= 0
+                    (dashboardData.totals?.balance || selectedAccount?.balance?.saldo || 0) >= 0
                       ? COLORS.success
                       : COLORS.danger,
                 },
               ]}
             >
               {formatCurrency(
-                dashboardData.totals?.balance || 0,
+                dashboardData.totals?.balance || selectedAccount?.balance?.saldo || 0,
                 selectedAccount?.moneda
               )}
             </Text>
           </Card>
 
           {/* Income vs Expenses Chart */}
-          {dashboardData.monthlyTrends && dashboardData.monthlyTrends.length > 0 && (
+          {dashboardData?.monthlyTrends && dashboardData.monthlyTrends.length > 0 && (
             <Card style={styles.chartCard}>
               <Text style={styles.chartTitle}>Tendencia Mensual</Text>
               <LineChart
@@ -250,7 +250,7 @@ const DashboardScreen = ({ navigation }) => {
           )}
 
           {/* Expenses by Category */}
-          {dashboardData.expensesByCategory &&
+          {dashboardData?.expensesByCategory &&
             dashboardData.expensesByCategory.length > 0 && (
               <Card style={styles.chartCard}>
                 <Text style={styles.chartTitle}>Gastos por Categoría</Text>
@@ -279,11 +279,6 @@ const DashboardScreen = ({ navigation }) => {
               </Card>
             )}
         </>
-      ) : (
-        <Card style={styles.noDataCard}>
-          <Ionicons name="bar-chart-outline" size={48} color={COLORS.gray[300]} />
-          <Text style={styles.noDataText}>No hay datos para mostrar</Text>
-        </Card>
       )}
 
       {/* Upcoming Events */}
