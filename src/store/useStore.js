@@ -850,12 +850,17 @@ export const useNotificationsStore = create((set, get) => ({
   deleteSound: async (soundId) => {
     try {
       await preferencesAPI.deleteSound(soundId);
+      // Filter out the sound - handle both 'custom_123' and '123' formats
+      const fullId = `custom_${soundId}`;
       set((state) => ({
-        availableSounds: state.availableSounds.filter((s) => s.id !== soundId),
+        availableSounds: state.availableSounds.filter((s) => {
+          const sId = s.id || s._id;
+          return sId !== soundId && sId !== fullId;
+        }),
       }));
       return { success: true };
     } catch (error) {
-      const errorMessage = error.response?.data?.message || 'Error al eliminar sonido';
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Error al eliminar sonido';
       return { success: false, error: errorMessage };
     }
   },

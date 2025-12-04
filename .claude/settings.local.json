@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(tree:*)",
+      "Bash(dir:*)",
+      "Bash(nul)",
+      "Bash(mkdir:*)",
+      "Bash(npx expo:*)",
+      "Bash(set EXPO_NO_METRO_WORKSPACE_ROOT=1)",
+      "Bash(npm install:*)",
+      "Bash(taskkill:*)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(timeout /t 2)",
+      "Bash(ping:*)",
+      "Bash(netstat:*)",
+      "Bash(cat:*)",
+      "Bash(curl:*)",
+      "Bash(ipconfig:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(powershell -Command \"[System.Convert]::FromBase64String(''//uQxAAAAAANIAAAAAExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU='') | Set-Content -Path ''E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\default.mp3'' -Encoding Byte\")",
+      "Bash(copy \"E:\\workana\\juan project\\finance project(mobile)\\node_modules\\@react-native-community\\cli-debugger-ui\\build\\ui\\assets\\priority.wav\" \"E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\default.wav\")",
+      "Bash(copy:*)",
+      "Bash(copy \"E:\\workana\\juan project\\finance project(mobile)\\node_modules\\@react-native-community\\cli-debugger-ui\\build\\ui\\assets\\priority.wav\" \"E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\ding.wav\")",
+      "Bash(copy \"E:\\workana\\juan project\\finance project(mobile)\\node_modules\\@react-native-community\\cli-debugger-ui\\build\\ui\\assets\\priority.wav\" \"E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\alert.wav\")",
+      "Bash(copy \"E:\\workana\\juan project\\finance project(mobile)\\node_modules\\@react-native-community\\cli-debugger-ui\\build\\ui\\assets\\priority.wav\" \"E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\gentle.wav\")",
+      "Bash(xcopy:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(timeout /t 15)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

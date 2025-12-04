@@ -1,11 +1,31 @@
 // Notification Sound Utility for React Native
-// Uses expo-av for audio playback
+// Uses expo-av for audio playback with local bundled sounds
 
 import { Audio } from 'expo-av';
 import Toast from 'react-native-toast-message';
+import { API_URL } from '../config/api';
 
-// Base URL for API - should match your backend
-const API_BASE_URL = 'http://192.168.1.100:3000'; // Update this to your backend URL
+// Base URL for API - uses the same URL as the API service
+const API_BASE_URL = API_URL || 'http://192.168.1.100:3000';
+
+// Get the server base URL (without /api) for serving uploaded files
+const getServerBaseUrl = () => {
+  // Remove /api from the end if present
+  return API_BASE_URL.replace(/\/api\/?$/, '');
+};
+
+// Local bundled sound assets (require must be static)
+// Sound files are located in assets/sounds/ folder
+const LOCAL_SOUNDS = {
+  default: require('../../assets/sounds/default.wav'),
+  chime: require('../../assets/sounds/chime.wav'),
+  bell: require('../../assets/sounds/bell.wav'),
+  ping: require('../../assets/sounds/ping.wav'),
+  pop: require('../../assets/sounds/pop.wav'),
+  ding: require('../../assets/sounds/ding.wav'),
+  alert: require('../../assets/sounds/alert.wav'),
+  gentle: require('../../assets/sounds/gentle.wav'),
+};
 
 class NotificationSoundManager {
   constructor() {
@@ -51,26 +71,16 @@ class NotificationSoundManager {
     }
   }
 
-  // Generate a simple beep using oscillator simulation
-  // For mobile we use pre-recorded sounds or generate them
-  getSoundUri(soundId) {
-    // Use free sound effects from a CDN or bundled sounds
-    // These are placeholder URLs - in production, use your own sound files
-    const soundUrls = {
-      default: 'https://cdn.freesound.org/previews/341/341695_5858296-lq.mp3',
-      chime: 'https://cdn.freesound.org/previews/411/411089_5121236-lq.mp3',
-      bell: 'https://cdn.freesound.org/previews/411/411090_5121236-lq.mp3',
-      ping: 'https://cdn.freesound.org/previews/536/536420_11943129-lq.mp3',
-      pop: 'https://cdn.freesound.org/previews/536/536108_11943129-lq.mp3',
-      ding: 'https://cdn.freesound.org/previews/352/352661_6476280-lq.mp3',
-      alert: 'https://cdn.freesound.org/previews/536/536113_11943129-lq.mp3',
-      gentle: 'https://cdn.freesound.org/previews/352/352650_6476280-lq.mp3',
-    };
-    return soundUrls[soundId] || soundUrls.default;
+  // Get local sound asset for each notification sound
+  getLocalSound(soundId) {
+    return LOCAL_SOUNDS[soundId] || LOCAL_SOUNDS.default;
   }
 
-  async play(soundId = 'default', customUrl = null) {
+  async play(soundId = 'default', customUrl = null, onStatusUpdate = null) {
     if (!this.enabled || soundId === 'none') {
+      if (onStatusUpdate) {
+        onStatusUpdate({ isPlaying: false, duration: 0, position: 0, didJustFinish: true });
+      }
       return;
     }
 
@@ -78,16 +88,20 @@ class NotificationSoundManager {
       await this.init();
       await this.unloadSound();
 
-      let uri;
+      let soundSource;
       if (customUrl) {
-        // Custom uploaded sound
-        uri = customUrl.startsWith('http') ? customUrl : `${API_BASE_URL}${customUrl}`;
+        // Custom uploaded sound - use server base URL (without /api)
+        const uri = customUrl.startsWith('http') ? customUrl : `${getServerBaseUrl()}${customUrl}`;
+        soundSource = { uri };
+        console.log('Playing custom sound from:', uri);
       } else {
-        uri = this.getSoundUri(soundId);
+        // Use local bundled sound
+        soundSource = this.getLocalSound(soundId);
+        console.log('Playing local sound:', soundId);
       }
 
       const { sound } = await Audio.Sound.createAsync(
-        { uri },
+        soundSource,
         {
           shouldPlay: true,
           volume: this.volume,
@@ -98,46 +112,46 @@ class NotificationSoundManager {
       this.sound = sound;
 
       sound.setOnPlaybackStatusUpdate((status) => {
+        if (onStatusUpdate && status.isLoaded) {
+          onStatusUpdate({
+            isPlaying: status.isPlaying,
+            duration: Math.floor((status.durationMillis || 0) / 1000),
+            position: Math.floor((status.positionMillis || 0) / 1000),
+            didJustFinish: status.didJustFinish || false,
+          });
+        }
         if (status.didJustFinish) {
           this.unloadSound();
         }
       });
     } catch (error) {
       console.log('Sound playback error:', error.message);
+      Toast.show({
+        type: 'error',
+        text1: 'Error de sonido',
+        text2: 'No se pudo cargar el sonido.',
+        visibilityTime: 2000,
+      });
+      if (onStatusUpdate) {
+        onStatusUpdate({ isPlaying: false, duration: 0, position: 0, didJustFinish: true });
+      }
     }
   }
 
-  async preview(soundId, volume, customUrl = null) {
+  async preview(soundId, volume, customUrl = null, onStatusUpdate = null) {
     if (soundId === 'none') {
-      Toast.show({
-        type: 'info',
-        text1: 'Sin sonido',
-        text2: 'Las notificaciones seran silenciosas',
-        visibilityTime: 1500,
-      });
+      if (onStatusUpdate) {
+        onStatusUpdate({ isPlaying: false, duration: 0, position: 0, didJustFinish: true });
+      }
       return;
     }
-
-    const originalVolume = this.volume;
-    const originalEnabled = this.enabled;
 
     if (volume !== undefined) {
       this.setVolume(volume);
     }
     this.enabled = true;
 
-    await this.play(soundId, customUrl);
-
-    // Show toast to indicate sound is playing
-    Toast.show({
-      type: 'success',
-      text1: this.getSoundName(soundId),
-      text2: 'Reproduciendo...',
-      visibilityTime: 1000,
-    });
-
-    this.volume = originalVolume;
-    this.enabled = originalEnabled;
+    await this.play(soundId, customUrl, onStatusUpdate);
   }
 
   getSoundName(soundId) {
