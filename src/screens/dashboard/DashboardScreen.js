@@ -152,7 +152,7 @@ const DashboardScreen = ({ navigation }) => {
                 {account.nombre}
               </Text>
               <Text style={styles.accountBalance}>
-                {formatCurrency(account.saldo || 0, account.moneda)}
+                {formatCurrency(account.balance?.saldo ?? account.saldo ?? 0, account.moneda)}
               </Text>
             </TouchableOpacity>
           );
