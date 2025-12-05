@@ -38,7 +38,9 @@
       "Bash(del \"E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\ding.wav\")",
       "Bash(del \"E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\alert.wav\")",
       "Bash(del \"E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\gentle.wav\")",
-      "Bash(powershell \"ls ''E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\'' | ft Name, Length\")"
+      "Bash(powershell \"ls ''E:\\workana\\juan project\\finance project(mobile)\\assets\\sounds\\'' | ft Name, Length\")",
+      "Bash(eas build:*)",
+      "Bash(eas login:*)"
     ],
     "deny": [],
     "ask": []
