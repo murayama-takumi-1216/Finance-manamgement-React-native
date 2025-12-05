@@ -293,6 +293,16 @@ export const useAccountsStore = create((set, get) => ({
     }
   },
 
+  updateMemberRole: async (accountId, userId, data) => {
+    try {
+      const response = await accountsAPI.updateMemberRole(accountId, userId, data);
+      return { success: true, member: response.data.member || response.data };
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || 'Error al actualizar rol';
+      return { success: false, error: errorMessage };
+    }
+  },
+
   setCurrentAccount: (account) => set({ currentAccount: account }),
   clearCurrentAccount: () => set({ currentAccount: null }),
   clearError: () => set({ error: null }),

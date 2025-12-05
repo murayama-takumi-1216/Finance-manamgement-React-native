@@ -27,7 +27,7 @@ const MEMBER_ROLES = [
 
 const AccountDetailScreen = ({ route, navigation }) => {
   const { accountId } = route.params;
-  const { fetchAccountById, currentAccount, isLoading, inviteUser, removeMember } = useAccountsStore();
+  const { fetchAccountById, currentAccount, isLoading, inviteUser, removeMember, updateMemberRole } = useAccountsStore();
   const [refreshing, setRefreshing] = useState(false);
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -36,6 +36,10 @@ const AccountDetailScreen = ({ route, navigation }) => {
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState(null);
   const [removing, setRemoving] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [memberToEdit, setMemberToEdit] = useState(null);
+  const [editRole, setEditRole] = useState('viewer');
+  const [updating, setUpdating] = useState(false);
 
   const loadAccount = useCallback(async () => {
     await fetchAccountById(accountId);
@@ -122,6 +126,38 @@ const AccountDetailScreen = ({ route, navigation }) => {
       }
     } finally {
       setRemoving(false);
+    }
+  };
+
+  const handleEditMember = (member) => {
+    setMemberToEdit(member);
+    setEditRole(member.rol || 'viewer');
+    setEditModalVisible(true);
+  };
+
+  const handleUpdateMemberRole = async () => {
+    if (!memberToEdit) return;
+
+    setUpdating(true);
+    try {
+      const result = await updateMemberRole(accountId, memberToEdit.usuario_id || memberToEdit.usuarioId, { rol: editRole });
+      if (result.success) {
+        Toast.show({
+          type: 'success',
+          text1: 'Rol actualizado',
+        });
+        setEditModalVisible(false);
+        setMemberToEdit(null);
+        loadAccount();
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: result.error || 'No se pudo actualizar el rol',
+        });
+      }
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -364,12 +400,20 @@ const AccountDetailScreen = ({ route, navigation }) => {
                   </Text>
                 </View>
                 {member.rol !== 'owner' && member.rol !== 'propietario' && (
-                  <TouchableOpacity
-                    style={styles.removeMemberBtn}
-                    onPress={() => handleRemoveMember(member)}
-                  >
-                    <Ionicons name="close-circle" size={22} color={COLORS.danger} />
-                  </TouchableOpacity>
+                  <View style={styles.memberActions}>
+                    <TouchableOpacity
+                      style={styles.editMemberBtn}
+                      onPress={() => handleEditMember(member)}
+                    >
+                      <Ionicons name="pencil" size={18} color={COLORS.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.removeMemberBtn}
+                      onPress={() => handleRemoveMember(member)}
+                    >
+                      <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
             ))
@@ -416,6 +460,55 @@ const AccountDetailScreen = ({ route, navigation }) => {
             title="Invitar"
             onPress={handleInviteMember}
             loading={inviting}
+            style={styles.modalButton}
+          />
+        </View>
+      </Modal>
+
+      {/* Edit Member Modal */}
+      <Modal
+        visible={editModalVisible}
+        onClose={() => {
+          setEditModalVisible(false);
+          setMemberToEdit(null);
+        }}
+        title="Editar miembro"
+      >
+        <View style={styles.editMemberInfo}>
+          <View style={styles.memberAvatar}>
+            <Text style={styles.memberAvatarText}>
+              {(memberToEdit?.usuario?.nombre || memberToEdit?.email || 'U')[0].toUpperCase()}
+            </Text>
+          </View>
+          <View>
+            <Text style={styles.editMemberName}>
+              {memberToEdit?.usuario?.nombre || memberToEdit?.nombre || 'Usuario'}
+            </Text>
+            <Text style={styles.editMemberEmail}>
+              {memberToEdit?.usuario?.email || memberToEdit?.email}
+            </Text>
+          </View>
+        </View>
+        <Select
+          label="Rol"
+          value={editRole}
+          options={MEMBER_ROLES}
+          onSelect={setEditRole}
+        />
+        <View style={styles.modalButtons}>
+          <Button
+            title="Cancelar"
+            variant="outline"
+            onPress={() => {
+              setEditModalVisible(false);
+              setMemberToEdit(null);
+            }}
+            style={styles.modalButton}
+          />
+          <Button
+            title="Guardar"
+            onPress={handleUpdateMemberRole}
+            loading={updating}
             style={styles.modalButton}
           />
         </View>
@@ -659,9 +752,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  removeMemberBtn: {
+  memberActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginLeft: 8,
-    padding: 4,
+    gap: 4,
+  },
+  editMemberBtn: {
+    padding: 6,
+    backgroundColor: `${COLORS.primary}15`,
+    borderRadius: 6,
+  },
+  removeMemberBtn: {
+    padding: 6,
+    backgroundColor: `${COLORS.danger}15`,
+    borderRadius: 6,
+  },
+  editMemberInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: COLORS.gray[50],
+    borderRadius: 12,
+  },
+  editMemberName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.gray[900],
+  },
+  editMemberEmail: {
+    fontSize: 13,
+    color: COLORS.gray[500],
+    marginTop: 2,
   },
   modalButtons: {
     flexDirection: 'row',
