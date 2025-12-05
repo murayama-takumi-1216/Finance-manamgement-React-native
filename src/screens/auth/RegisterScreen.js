@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
@@ -91,9 +92,11 @@ const RegisterScreen = ({ navigation }) => {
         >
           <View style={styles.header}>
             <View style={styles.logoContainer}>
-              <View style={styles.logoPlaceholder}>
-                <Text style={styles.logoText}>FM</Text>
-              </View>
+              <Image
+                source={require('../../../assets/icon.png')}
+                style={styles.logo}
+                resizeMode="contain"
+              />
             </View>
             <Text style={styles.title}>Crear Cuenta</Text>
             <Text style={styles.subtitle}>
@@ -203,18 +206,10 @@ const styles = StyleSheet.create({
   logoContainer: {
     marginBottom: 24,
   },
-  logoPlaceholder: {
-    width: 80,
-    height: 80,
+  logo: {
+    width: 100,
+    height: 100,
     borderRadius: 20,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: COLORS.white,
   },
   title: {
     fontSize: 28,

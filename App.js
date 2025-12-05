@@ -1,11 +1,10 @@
-import React, { useEffect, useCallback } from 'react';
-import { View, LogBox } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { LogBox } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Toast from 'react-native-toast-message';
 import { NavigationContainer } from '@react-navigation/native';
-import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import RootNavigator from './src/navigation/RootNavigator';
@@ -13,6 +12,7 @@ import { useAuthStore } from './src/store/useStore';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import { AlarmModal } from './src/components/common';
 import useReminderAlarm from './src/hooks/useReminderAlarm';
+import SplashLoadingScreen from './src/components/SplashLoadingScreen';
 
 // Ignore specific warnings
 LogBox.ignoreLogs([
@@ -21,12 +21,10 @@ LogBox.ignoreLogs([
   'java.lang.Exception',
 ]);
 
-// Keep splash screen visible while loading resources
-SplashScreen.preventAutoHideAsync();
-
 export default function App() {
   const { initializeAuth, isInitialized } = useAuthStore();
   const { activeAlarm, dismissAlarm, snoozeAlarm } = useReminderAlarm();
+  const [appReady, setAppReady] = useState(false);
 
   const [fontsLoaded] = useFonts({
     ...Ionicons.font,
@@ -46,23 +44,24 @@ export default function App() {
     init();
   }, [initializeAuth, isInitialized]);
 
-  const onLayoutRootView = useCallback(async () => {
+  // Set app ready when fonts loaded and auth initialized
+  useEffect(() => {
     if (fontsLoaded && isInitialized) {
-      try {
-        await SplashScreen.hideAsync();
-      } catch (e) {
-        // Ignore splash screen errors
-      }
+      // Small delay for smooth transition
+      const timer = setTimeout(() => {
+        setAppReady(true);
+      }, 500);
+      return () => clearTimeout(timer);
     }
   }, [fontsLoaded, isInitialized]);
 
-  if (!fontsLoaded) {
-    return null;
+  if (!appReady) {
+    return <SplashLoadingScreen />;
   }
 
   return (
     <ErrorBoundary>
-      <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <NavigationContainer>
             <StatusBar style="auto" />
