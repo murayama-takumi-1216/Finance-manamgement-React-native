@@ -325,6 +325,10 @@ const TasksScreen = ({ navigation }) => {
             <Text style={styles.summaryNumber}>{summary.pendientes || 0}</Text>
             <Text style={styles.summaryLabel}>Pendientes</Text>
           </Card>
+          <Card style={[styles.summaryCard, { borderTopColor: COLORS.info }]}>
+            <Text style={styles.summaryNumber}>{summary.en_progreso || summary.enProgreso || 0}</Text>
+            <Text style={styles.summaryLabel}>En Progreso</Text>
+          </Card>
           <Card style={[styles.summaryCard, { borderTopColor: COLORS.success }]}>
             <Text style={styles.summaryNumber}>{summary.completadas || 0}</Text>
             <Text style={styles.summaryLabel}>Completadas</Text>
