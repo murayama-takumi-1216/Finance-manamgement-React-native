@@ -183,6 +183,8 @@ const TasksScreen = ({ navigation }) => {
         type: 'success',
         text1: 'Estado actualizado',
       });
+      // Reload the list to reflect the status change
+      loadData();
     }
   };
 
