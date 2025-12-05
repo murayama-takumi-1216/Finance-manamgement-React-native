@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,34 +9,48 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as SplashScreen from 'expo-splash-screen';
 import { COLORS } from '../constants';
 
 const { width } = Dimensions.get('window');
 
 const SplashLoadingScreen = () => {
+  // Hide native splash when this component is ready
+  const onLayoutRootView = useCallback(async () => {
+    try {
+      await SplashScreen.hideAsync();
+    } catch (e) {
+      // Ignore errors
+    }
+  }, []);
   const spinValue = useRef(new Animated.Value(0)).current;
   const pulseValue = useRef(new Animated.Value(1)).current;
-  const fadeValue = useRef(new Animated.Value(0)).current;
-  const slideValue = useRef(new Animated.Value(30)).current;
+  // Start visible to match native splash (icon already showing)
+  const logoOpacity = useRef(new Animated.Value(1)).current;
+  // Other elements fade in after
+  const contentFadeValue = useRef(new Animated.Value(0)).current;
+  const slideValue = useRef(new Animated.Value(20)).current;
   const dotOpacity1 = useRef(new Animated.Value(0.3)).current;
   const dotOpacity2 = useRef(new Animated.Value(0.3)).current;
   const dotOpacity3 = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
-    // Fade in animation
-    Animated.parallel([
-      Animated.timing(fadeValue, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideValue, {
-        toValue: 0,
-        duration: 800,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start();
+    // Slight delay then fade in text/progress (logo already visible)
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(contentFadeValue, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideValue, {
+          toValue: 0,
+          duration: 500,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, 100);
 
     // Spinning animation for the outer ring
     Animated.loop(
@@ -118,7 +132,7 @@ const SplashLoadingScreen = () => {
   });
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={onLayoutRootView}>
       <LinearGradient
         colors={['#4F46E5', '#7C3AED', '#4F46E5']}
         start={{ x: 0, y: 0 }}
@@ -130,16 +144,8 @@ const SplashLoadingScreen = () => {
         <View style={styles.bgCircle2} />
         <View style={styles.bgCircle3} />
 
-        <Animated.View
-          style={[
-            styles.content,
-            {
-              opacity: fadeValue,
-              transform: [{ translateY: slideValue }],
-            },
-          ]}
-        >
-          {/* Logo container with spinner */}
+        <View style={styles.content}>
+          {/* Logo container with spinner - Always visible immediately */}
           <View style={styles.logoWrapper}>
             {/* Spinning ring */}
             <Animated.View
@@ -166,27 +172,36 @@ const SplashLoadingScreen = () => {
             </Animated.View>
           </View>
 
-          {/* App name */}
-          <Text style={styles.appName}>Finance Manager</Text>
-          <Text style={styles.tagline}>Gestiona tus finanzas inteligentemente</Text>
+          {/* Content that fades in */}
+          <Animated.View
+            style={{
+              opacity: contentFadeValue,
+              transform: [{ translateY: slideValue }],
+              alignItems: 'center',
+            }}
+          >
+            {/* App name */}
+            <Text style={styles.appName}>Finance Manager</Text>
+            <Text style={styles.tagline}>Gestiona tus finanzas inteligentemente</Text>
 
-          {/* Loading indicator */}
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Cargando</Text>
-            <View style={styles.dotsContainer}>
-              <Animated.View style={[styles.dot, { opacity: dotOpacity1 }]} />
-              <Animated.View style={[styles.dot, { opacity: dotOpacity2 }]} />
-              <Animated.View style={[styles.dot, { opacity: dotOpacity3 }]} />
+            {/* Loading indicator */}
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Cargando</Text>
+              <View style={styles.dotsContainer}>
+                <Animated.View style={[styles.dot, { opacity: dotOpacity1 }]} />
+                <Animated.View style={[styles.dot, { opacity: dotOpacity2 }]} />
+                <Animated.View style={[styles.dot, { opacity: dotOpacity3 }]} />
+              </View>
             </View>
-          </View>
 
-          {/* Progress bar */}
-          <View style={styles.progressBarContainer}>
-            <Animated.View style={styles.progressBarTrack}>
-              <ProgressBar />
-            </Animated.View>
-          </View>
-        </Animated.View>
+            {/* Progress bar */}
+            <View style={styles.progressBarContainer}>
+              <Animated.View style={styles.progressBarTrack}>
+                <ProgressBar />
+              </Animated.View>
+            </View>
+          </Animated.View>
+        </View>
       </LinearGradient>
     </View>
   );

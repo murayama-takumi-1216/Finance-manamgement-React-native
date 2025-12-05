@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Toast from 'react-native-toast-message';
 import { NavigationContainer } from '@react-navigation/native';
+import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import RootNavigator from './src/navigation/RootNavigator';
@@ -20,6 +21,9 @@ LogBox.ignoreLogs([
   'Network Error',
   'java.lang.Exception',
 ]);
+
+// Keep native splash visible until our loading screen is ready
+SplashScreen.preventAutoHideAsync();
 
 export default function App() {
   const { initializeAuth, isInitialized } = useAuthStore();

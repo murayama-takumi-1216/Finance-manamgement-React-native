@@ -7,6 +7,8 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
       "backgroundColor": "#4F46E5"
     },
     "assetBundlePatterns": [
@@ -21,7 +23,12 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#4F46E5"
       },
-      "package": "com.financemanager.mobile"
+      "package": "com.financemanager.mobile",
+      "splash": {
+        "image": "./assets/icon.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#4F46E5"
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
