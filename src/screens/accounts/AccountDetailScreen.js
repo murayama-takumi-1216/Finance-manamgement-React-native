@@ -20,9 +20,8 @@ import {
 } from '../../constants';
 
 const MEMBER_ROLES = [
-  { value: 'viewer', label: 'Visor' },
+  { value: 'solo_lectura', label: 'Solo lectura' },
   { value: 'editor', label: 'Editor' },
-  { value: 'admin', label: 'Administrador' },
 ];
 
 const AccountDetailScreen = ({ route, navigation }) => {
@@ -31,14 +30,14 @@ const AccountDetailScreen = ({ route, navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState('viewer');
+  const [inviteRole, setInviteRole] = useState('solo_lectura');
   const [inviting, setInviting] = useState(false);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState(null);
   const [removing, setRemoving] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [memberToEdit, setMemberToEdit] = useState(null);
-  const [editRole, setEditRole] = useState('viewer');
+  const [editRole, setEditRole] = useState('solo_lectura');
   const [updating, setUpdating] = useState(false);
 
   const loadAccount = useCallback(async () => {
@@ -75,7 +74,7 @@ const AccountDetailScreen = ({ route, navigation }) => {
 
     setInviting(true);
     try {
-      const result = await inviteUser(accountId, { email: inviteEmail, rol: inviteRole });
+      const result = await inviteUser(accountId, { email: inviteEmail, rol_en_cuenta: inviteRole });
       if (result.success) {
         Toast.show({
           type: 'success',
@@ -84,7 +83,7 @@ const AccountDetailScreen = ({ route, navigation }) => {
         });
         setInviteModalVisible(false);
         setInviteEmail('');
-        setInviteRole('viewer');
+        setInviteRole('solo_lectura');
         loadAccount();
       } else {
         Toast.show({
@@ -106,9 +105,21 @@ const AccountDetailScreen = ({ route, navigation }) => {
   const confirmRemoveMember = async () => {
     if (!memberToRemove) return;
 
+    // Get user ID from various possible field names
+    const userId = memberToRemove.usuario_id || memberToRemove.usuarioId || memberToRemove.usuario?.id || memberToRemove.id;
+
+    if (!userId) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'No se pudo identificar el usuario',
+      });
+      return;
+    }
+
     setRemoving(true);
     try {
-      const result = await removeMember(accountId, memberToRemove.usuario_id || memberToRemove.usuarioId);
+      const result = await removeMember(accountId, userId);
       if (result.success) {
         Toast.show({
           type: 'success',
@@ -131,16 +142,31 @@ const AccountDetailScreen = ({ route, navigation }) => {
 
   const handleEditMember = (member) => {
     setMemberToEdit(member);
-    setEditRole(member.rol || 'viewer');
+    // Use rol_en_cuenta if available, otherwise fall back to rol
+    setEditRole(member.rol_en_cuenta || member.rol || 'solo_lectura');
     setEditModalVisible(true);
   };
 
   const handleUpdateMemberRole = async () => {
     if (!memberToEdit) return;
 
+    // Get user ID from various possible field names
+    const userId = memberToEdit.usuario_id || memberToEdit.usuarioId || memberToEdit.usuario?.id || memberToEdit.id;
+    console.log('[EditMember] Member data:', JSON.stringify(memberToEdit, null, 2));
+    console.log('[EditMember] User ID:', userId, 'New Role:', editRole);
+
+    if (!userId) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'No se pudo identificar el usuario',
+      });
+      return;
+    }
+
     setUpdating(true);
     try {
-      const result = await updateMemberRole(accountId, memberToEdit.usuario_id || memberToEdit.usuarioId, { rol: editRole });
+      const result = await updateMemberRole(accountId, userId, { rol_en_cuenta: editRole });
       if (result.success) {
         Toast.show({
           type: 'success',
@@ -166,11 +192,12 @@ const AccountDetailScreen = ({ route, navigation }) => {
       case 'owner':
       case 'propietario':
         return COLORS.primary;
-      case 'admin':
-      case 'administrador':
-        return COLORS.success;
       case 'editor':
-        return COLORS.warning;
+        return COLORS.success;
+      case 'solo_lectura':
+      case 'viewer':
+      case 'visor':
+        return COLORS.info;
       default:
         return COLORS.gray[500];
     }
@@ -181,14 +208,12 @@ const AccountDetailScreen = ({ route, navigation }) => {
       case 'owner':
       case 'propietario':
         return 'Propietario';
-      case 'admin':
-      case 'administrador':
-        return 'Admin';
       case 'editor':
         return 'Editor';
+      case 'solo_lectura':
       case 'viewer':
       case 'visor':
-        return 'Visor';
+        return 'Solo lectura';
       default:
         return role;
     }
@@ -394,12 +419,12 @@ const AccountDetailScreen = ({ route, navigation }) => {
                     {member.usuario?.email || member.email}
                   </Text>
                 </View>
-                <View style={[styles.roleBadge, { backgroundColor: `${getRoleBadgeColor(member.rol)}15` }]}>
-                  <Text style={[styles.roleBadgeText, { color: getRoleBadgeColor(member.rol) }]}>
-                    {getRoleLabel(member.rol)}
+                <View style={[styles.roleBadge, { backgroundColor: `${getRoleBadgeColor(member.rol_en_cuenta || member.rol)}15` }]}>
+                  <Text style={[styles.roleBadgeText, { color: getRoleBadgeColor(member.rol_en_cuenta || member.rol) }]}>
+                    {getRoleLabel(member.rol_en_cuenta || member.rol)}
                   </Text>
                 </View>
-                {member.rol !== 'owner' && member.rol !== 'propietario' && (
+                {(member.rol_en_cuenta || member.rol) !== 'owner' && (member.rol_en_cuenta || member.rol) !== 'propietario' && (
                   <View style={styles.memberActions}>
                     <TouchableOpacity
                       style={styles.editMemberBtn}
@@ -427,7 +452,7 @@ const AccountDetailScreen = ({ route, navigation }) => {
         onClose={() => {
           setInviteModalVisible(false);
           setInviteEmail('');
-          setInviteRole('viewer');
+          setInviteRole('solo_lectura');
         }}
         title="Invitar miembro"
       >
@@ -452,7 +477,7 @@ const AccountDetailScreen = ({ route, navigation }) => {
             onPress={() => {
               setInviteModalVisible(false);
               setInviteEmail('');
-              setInviteRole('viewer');
+              setInviteRole('solo_lectura');
             }}
             style={styles.modalButton}
           />

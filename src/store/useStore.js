@@ -295,10 +295,13 @@ export const useAccountsStore = create((set, get) => ({
 
   updateMemberRole: async (accountId, userId, data) => {
     try {
+      console.log('[Store] Updating member role:', { accountId, userId, data });
       const response = await accountsAPI.updateMemberRole(accountId, userId, data);
+      console.log('[Store] Update response:', response.data);
       return { success: true, member: response.data.member || response.data };
     } catch (error) {
-      const errorMessage = error.response?.data?.message || 'Error al actualizar rol';
+      console.error('[Store] Update member role error:', error.response?.data || error.message);
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Error al actualizar rol';
       return { success: false, error: errorMessage };
     }
   },
