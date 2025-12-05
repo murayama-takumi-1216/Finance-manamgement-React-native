@@ -6,11 +6,13 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Toast from 'react-native-toast-message';
 import { useAccountsStore } from '../../store/useStore';
-import { Card, Loading } from '../../components/common';
+import { Card, Loading, Modal, Input, Select, Button } from '../../components/common';
 import {
   COLORS,
   formatCurrency,
@@ -18,10 +20,20 @@ import {
   getAccountTypeInfo,
 } from '../../constants';
 
+const MEMBER_ROLES = [
+  { value: 'viewer', label: 'Visor' },
+  { value: 'editor', label: 'Editor' },
+  { value: 'admin', label: 'Administrador' },
+];
+
 const AccountDetailScreen = ({ route, navigation }) => {
   const { accountId } = route.params;
-  const { fetchAccountById, currentAccount, isLoading } = useAccountsStore();
+  const { fetchAccountById, currentAccount, isLoading, inviteUser, removeMember } = useAccountsStore();
   const [refreshing, setRefreshing] = useState(false);
+  const [inviteModalVisible, setInviteModalVisible] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('viewer');
+  const [inviting, setInviting] = useState(false);
 
   const loadAccount = useCallback(async () => {
     await fetchAccountById(accountId);
@@ -44,6 +56,104 @@ const AccountDetailScreen = ({ route, navigation }) => {
     await loadAccount();
     setRefreshing(false);
   }, [loadAccount]);
+
+  const handleInviteMember = async () => {
+    if (!inviteEmail.trim()) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Ingresa un correo electrónico',
+      });
+      return;
+    }
+
+    setInviting(true);
+    try {
+      const result = await inviteUser(accountId, { email: inviteEmail, rol: inviteRole });
+      if (result.success) {
+        Toast.show({
+          type: 'success',
+          text1: 'Invitación enviada',
+          text2: 'El usuario ha sido invitado a la cuenta',
+        });
+        setInviteModalVisible(false);
+        setInviteEmail('');
+        setInviteRole('viewer');
+        loadAccount();
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: result.error || 'No se pudo enviar la invitación',
+        });
+      }
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleRemoveMember = (member) => {
+    Alert.alert(
+      'Eliminar miembro',
+      `¿Estás seguro de que deseas eliminar a ${member.usuario?.nombre || member.email} de esta cuenta?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await removeMember(accountId, member.usuario_id || member.usuarioId);
+            if (result.success) {
+              Toast.show({
+                type: 'success',
+                text1: 'Miembro eliminado',
+              });
+              loadAccount();
+            } else {
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: result.error || 'No se pudo eliminar el miembro',
+              });
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const getRoleBadgeColor = (role) => {
+    switch (role) {
+      case 'owner':
+      case 'propietario':
+        return COLORS.primary;
+      case 'admin':
+      case 'administrador':
+        return COLORS.success;
+      case 'editor':
+        return COLORS.warning;
+      default:
+        return COLORS.gray[500];
+    }
+  };
+
+  const getRoleLabel = (role) => {
+    switch (role) {
+      case 'owner':
+      case 'propietario':
+        return 'Propietario';
+      case 'admin':
+      case 'administrador':
+        return 'Admin';
+      case 'editor':
+        return 'Editor';
+      case 'viewer':
+      case 'visor':
+        return 'Visor';
+      default:
+        return role;
+    }
+  };
 
   if (isLoading && !currentAccount) {
     return <Loading text="Cargando cuenta..." />;
@@ -197,6 +307,117 @@ const AccountDetailScreen = ({ route, navigation }) => {
         ))}
       </View>
 
+      {/* Account Members Section */}
+      <View style={styles.membersSection}>
+        <View style={styles.membersSectionHeader}>
+          <View style={styles.membersTitleRow}>
+            <View style={[styles.menuIconContainer, { backgroundColor: `${COLORS.primary}15` }]}>
+              <Ionicons name="people" size={24} color={COLORS.primary} />
+            </View>
+            <View>
+              <Text style={styles.sectionTitle}>Miembros de la cuenta</Text>
+              <Text style={styles.membersCount}>
+                {(currentAccount.miembros || currentAccount.members || []).length} miembro(s)
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.inviteButton}
+            onPress={() => setInviteModalVisible(true)}
+          >
+            <Ionicons name="person-add" size={18} color={COLORS.white} />
+            <Text style={styles.inviteButtonText}>Invitar</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Card style={styles.membersCard}>
+          {(currentAccount.miembros || currentAccount.members || []).length === 0 ? (
+            <Text style={styles.noMembersText}>No hay miembros adicionales</Text>
+          ) : (
+            (currentAccount.miembros || currentAccount.members || []).map((member, index) => (
+              <View
+                key={member.id || member.usuario_id || index}
+                style={[
+                  styles.memberItem,
+                  index < (currentAccount.miembros || currentAccount.members || []).length - 1 && styles.memberItemBorder,
+                ]}
+              >
+                <View style={styles.memberAvatar}>
+                  <Text style={styles.memberAvatarText}>
+                    {(member.usuario?.nombre || member.email || 'U')[0].toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.memberInfo}>
+                  <Text style={styles.memberName}>
+                    {member.usuario?.nombre || member.nombre || 'Usuario'}
+                  </Text>
+                  <Text style={styles.memberEmail}>
+                    {member.usuario?.email || member.email}
+                  </Text>
+                </View>
+                <View style={[styles.roleBadge, { backgroundColor: `${getRoleBadgeColor(member.rol)}15` }]}>
+                  <Text style={[styles.roleBadgeText, { color: getRoleBadgeColor(member.rol) }]}>
+                    {getRoleLabel(member.rol)}
+                  </Text>
+                </View>
+                {member.rol !== 'owner' && member.rol !== 'propietario' && (
+                  <TouchableOpacity
+                    style={styles.removeMemberBtn}
+                    onPress={() => handleRemoveMember(member)}
+                  >
+                    <Ionicons name="close-circle" size={22} color={COLORS.danger} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))
+          )}
+        </Card>
+      </View>
+
+      {/* Invite Member Modal */}
+      <Modal
+        visible={inviteModalVisible}
+        onClose={() => {
+          setInviteModalVisible(false);
+          setInviteEmail('');
+          setInviteRole('viewer');
+        }}
+        title="Invitar miembro"
+      >
+        <Input
+          label="Correo electrónico"
+          value={inviteEmail}
+          onChangeText={setInviteEmail}
+          placeholder="correo@ejemplo.com"
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+        <Select
+          label="Rol"
+          value={inviteRole}
+          options={MEMBER_ROLES}
+          onSelect={setInviteRole}
+        />
+        <View style={styles.modalButtons}>
+          <Button
+            title="Cancelar"
+            variant="outline"
+            onPress={() => {
+              setInviteModalVisible(false);
+              setInviteEmail('');
+              setInviteRole('viewer');
+            }}
+            style={styles.modalButton}
+          />
+          <Button
+            title="Invitar"
+            onPress={handleInviteMember}
+            loading={inviting}
+            style={styles.modalButton}
+          />
+        </View>
+      </Modal>
+
       <View style={styles.bottomPadding} />
     </ScrollView>
   );
@@ -332,6 +553,106 @@ const styles = StyleSheet.create({
   menuSubtitle: {
     fontSize: 13,
     color: COLORS.gray[500],
+  },
+  membersSection: {
+    paddingHorizontal: 16,
+    marginTop: 24,
+  },
+  membersSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  membersTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  membersCount: {
+    fontSize: 13,
+    color: COLORS.gray[500],
+    marginTop: 2,
+  },
+  inviteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  inviteButtonText: {
+    color: COLORS.white,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  membersCard: {
+    padding: 0,
+    overflow: 'hidden',
+  },
+  noMembersText: {
+    padding: 20,
+    textAlign: 'center',
+    color: COLORS.gray[500],
+    fontSize: 14,
+  },
+  memberItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  memberItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray[100],
+  },
+  memberAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  memberAvatarText: {
+    color: COLORS.white,
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  memberInfo: {
+    flex: 1,
+  },
+  memberName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.gray[900],
+    marginBottom: 2,
+  },
+  memberEmail: {
+    fontSize: 13,
+    color: COLORS.gray[500],
+  },
+  roleBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  roleBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  removeMemberBtn: {
+    marginLeft: 8,
+    padding: 4,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  modalButton: {
+    flex: 1,
   },
   bottomPadding: {
     height: 32,

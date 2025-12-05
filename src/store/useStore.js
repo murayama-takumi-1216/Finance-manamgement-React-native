@@ -273,6 +273,26 @@ export const useAccountsStore = create((set, get) => ({
     }
   },
 
+  inviteUser: async (accountId, data) => {
+    try {
+      const response = await accountsAPI.inviteUser(accountId, data);
+      return { success: true, member: response.data.member || response.data };
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || 'Error al invitar usuario';
+      return { success: false, error: errorMessage };
+    }
+  },
+
+  removeMember: async (accountId, userId) => {
+    try {
+      await accountsAPI.removeMember(accountId, userId);
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || 'Error al eliminar miembro';
+      return { success: false, error: errorMessage };
+    }
+  },
+
   setCurrentAccount: (account) => set({ currentAccount: account }),
   clearCurrentAccount: () => set({ currentAccount: null }),
   clearError: () => set({ error: null }),
