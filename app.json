@@ -8,7 +8,7 @@
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/icon.png",
-      "resizeMode": "contain",
+      "resizeMode": "native",
       "backgroundColor": "#4F46E5"
     },
     "assetBundlePatterns": [
@@ -26,7 +26,7 @@
       "package": "com.financemanager.mobile",
       "splash": {
         "image": "./assets/icon.png",
-        "resizeMode": "contain",
+        "resizeMode": "native",
         "backgroundColor": "#4F46E5"
       }
     },
