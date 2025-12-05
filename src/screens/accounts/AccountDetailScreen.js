@@ -6,13 +6,12 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Toast from 'react-native-toast-message';
 import { useAccountsStore } from '../../store/useStore';
-import { Card, Loading, Modal, Input, Select, Button } from '../../components/common';
+import { Card, Loading, Modal, Input, Select, Button, ConfirmDialog } from '../../components/common';
 import {
   COLORS,
   formatCurrency,
@@ -34,6 +33,9 @@ const AccountDetailScreen = ({ route, navigation }) => {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('viewer');
   const [inviting, setInviting] = useState(false);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState(null);
+  const [removing, setRemoving] = useState(false);
 
   const loadAccount = useCallback(async () => {
     await fetchAccountById(accountId);
@@ -93,33 +95,34 @@ const AccountDetailScreen = ({ route, navigation }) => {
   };
 
   const handleRemoveMember = (member) => {
-    Alert.alert(
-      'Eliminar miembro',
-      `¿Estás seguro de que deseas eliminar a ${member.usuario?.nombre || member.email} de esta cuenta?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await removeMember(accountId, member.usuario_id || member.usuarioId);
-            if (result.success) {
-              Toast.show({
-                type: 'success',
-                text1: 'Miembro eliminado',
-              });
-              loadAccount();
-            } else {
-              Toast.show({
-                type: 'error',
-                text1: 'Error',
-                text2: result.error || 'No se pudo eliminar el miembro',
-              });
-            }
-          },
-        },
-      ]
-    );
+    setMemberToRemove(member);
+    setDeleteDialogVisible(true);
+  };
+
+  const confirmRemoveMember = async () => {
+    if (!memberToRemove) return;
+
+    setRemoving(true);
+    try {
+      const result = await removeMember(accountId, memberToRemove.usuario_id || memberToRemove.usuarioId);
+      if (result.success) {
+        Toast.show({
+          type: 'success',
+          text1: 'Miembro eliminado',
+        });
+        setDeleteDialogVisible(false);
+        setMemberToRemove(null);
+        loadAccount();
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: result.error || 'No se pudo eliminar el miembro',
+        });
+      }
+    } finally {
+      setRemoving(false);
+    }
   };
 
   const getRoleBadgeColor = (role) => {
@@ -417,6 +420,20 @@ const AccountDetailScreen = ({ route, navigation }) => {
           />
         </View>
       </Modal>
+
+      {/* Remove Member Dialog */}
+      <ConfirmDialog
+        visible={deleteDialogVisible}
+        onClose={() => {
+          setDeleteDialogVisible(false);
+          setMemberToRemove(null);
+        }}
+        onConfirm={confirmRemoveMember}
+        title="Eliminar miembro"
+        message={`¿Estás seguro de que deseas eliminar a ${memberToRemove?.usuario?.nombre || memberToRemove?.email || 'este miembro'} de esta cuenta?`}
+        confirmText="Eliminar"
+        loading={removing}
+      />
 
       <View style={styles.bottomPadding} />
     </ScrollView>
